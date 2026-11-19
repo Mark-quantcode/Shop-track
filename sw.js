@@ -1,4 +1,4 @@
-const CACHE = "shop-track-v1";
+const CACHE = "shop-track-v2";
 const FILES = ["./", "./index.html", "./manifest.json"];
 self.addEventListener("install", e =>
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))));
