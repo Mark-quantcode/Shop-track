@@ -1,5 +1,11 @@
 <!doctype html>
 <html lang="en">
+  <link rel="manifest"href="manifest.json">
+  <meta name="theme-colour"content="#16a34a">
+  <script>
+    if("serviceworker"in navigator)
+      navigator.serviceworker.register("swiss.js");
+      </script>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
