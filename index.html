@@ -1,17 +1,17 @@
 <!doctype html>
 <html lang="en">
+  <head>
   <link rel="manifest"href="manifest.json">
-  <meta name="theme-colour"content="#16a34a">
   <script>
-    if("serviceworker"in navigator)
-      navigator.serviceworker.register("swiss.js");
+    if("serviceWorker"in navigator)
+      navigator.serviceWorker.register("sw.js");
       </script>
-<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0f766e">
 <title>ShopTrack</title>
 <style>
+  </head>
 :root{--bg:#f4f6f8;--card:#fff;--ink:#16202a;--mut:#6b7785;--pri:#0f766e;--bad:#c2410c;--ok:#15803d;--line:#e3e8ee}
 @media(prefers-color-scheme:dark){:root{--bg:#10151a;--card:#1a2129;--ink:#eef2f6;--mut:#93a1b0;--pri:#2dd4bf;--bad:#fb923c;--ok:#4ade80;--line:#2a343f}}
 *{box-sizing:border-box}
