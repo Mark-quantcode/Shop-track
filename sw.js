@@ -1,4 +1,4 @@
-const CACHE = "shop-track-v7";
+const CACHE = "shop-track-v8";
 const FILES = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {
