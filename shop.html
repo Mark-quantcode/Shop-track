@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0f766e">
+<link rel="icon" href="icon-192.png">
+<title>Online shop</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--ink:#16202a;--mut:#6b7785;--pri:#0f766e;--bad:#c2410c;--ok:#15803d;--line:#e3e8ee}
+@media(prefers-color-scheme:dark){:root{--bg:#10151a;--card:#1a2129;--ink:#eef2f6;--mut:#93a1b0;--pri:#2dd4bf;--bad:#fb923c;--ok:#4ade80;--line:#2a343f}}
+*{box-sizing:border-box}
+body{margin:0;font:16px system-ui,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
+.live-bg{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
+.blob{position:absolute;width:70vmax;height:70vmax;border-radius:50%;opacity:.28;animation:drift 22s ease-in-out infinite alternate}
+.b1{background:radial-gradient(circle,#14b8a6 0%,transparent 65%);top:-25vmax;left:-20vmax}
+.b2{background:radial-gradient(circle,#fb923c 0%,transparent 65%);bottom:-30vmax;right:-25vmax;animation-duration:28s;animation-delay:-8s}
+@keyframes drift{0%{transform:translate(0,0) scale(1)}50%{transform:translate(8vmax,6vmax) scale(1.12)}100%{transform:translate(-6vmax,10vmax) scale(.95)}}
+@media(prefers-color-scheme:dark){.blob{opacity:.2}}
+@media(prefers-reduced-motion:reduce){.blob{animation:none}}
+.hero{background:linear-gradient(135deg,#0f766e,#134e4a);color:#fff;padding:22px 16px 18px}
+.hero .in{max-width:640px;margin:auto}
+.hero img{width:44px;height:44px;border-radius:12px;display:block;margin-bottom:8px}
+.hero h1{margin:0;font-size:24px}
+.hero p{margin:4px 0 0;opacity:.85;font-size:14px}
+main{max-width:640px;margin:auto;padding:14px}
+input{width:100%;padding:12px;font-size:16px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);margin-bottom:12px}
+.item{background:color-mix(in srgb,var(--card) 90%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px;display:flex;justify-content:space-between;gap:10px;align-items:center}
+.item b{font-size:17px}
+.item small{display:block;color:var(--mut);margin-top:2px}
+.price{font-size:18px;font-weight:700;color:var(--pri);white-space:nowrap}
+.tag{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;margin-top:6px}
+.tag.ok{background:#dcfce7;color:#166534}.tag.no{background:#fee2e2;color:#991b1b}
+a.ord{display:inline-block;margin-top:8px;padding:8px 12px;border-radius:8px;background:#16a34a;color:#fff;text-decoration:none;font-size:14px;font-weight:600}
+.empty{text-align:center;color:var(--mut);padding:30px 10px}
+footer{text-align:center;color:var(--mut);font-size:12px;padding:20px}
+</style>
+</head>
+<body>
+<div class="live-bg" aria-hidden="true"><i class="blob b1"></i><i class="blob b2"></i></div>
+<div id="root"><div class="empty">Loading shop…</div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL = 'https://inugsmnlodvfsbkpxuyb.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_cj84eL5811FNFUBZ-xtAXw_5A7-w4KX';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money = n => 'KSh ' + Number(n || 0).toLocaleString('en-KE', {maximumFractionDigits:2});
+const owner = new URLSearchParams(location.search).get('s');
+let shop = null, items = [], q = '', demo = false;
+
+function show(){
+  const root = document.getElementById('root');
+  if (!shop) return;
+  const phone = (shop.phone || '').replace(/\D/g, '');
+  const list = items.filter(i => (i.name + ' ' + (i.description || '')).toLowerCase().includes(q.toLowerCase()));
+  root.innerHTML = `<div class="hero"><div class="in"><img src="icon-192.png" alt=""><h1>${esc(shop.name)}</h1><p>${demo ? 'SAMPLE SHOP: open your own shop link to see your real items' : "Browse what's available and order on WhatsApp"}</p></div></div>
+  <main>
+  <input id="q" type="search" placeholder="Search items…" value="${esc(q)}" oninput="q=this.value;show();refocus()">
+  ${list.map(i => `<div class="item"><div><b>${esc(i.name)}</b>${i.description ? `<small>${esc(i.description)}</small>` : ''}
+    <span class="tag ${i.in_stock ? 'ok' : 'no'}">${i.in_stock ? 'In stock' : 'Out of stock'}</span>
+    ${phone && i.in_stock ? `<br><a class="ord" target="_blank" rel="noopener" href="https://wa.me/${phone}?text=${encodeURIComponent(`Hi ${shop.name}, I'd like to order: ${i.name} (${money(i.price)})`)}">Order on WhatsApp</a>` : ''}</div>
+    <div class="price">${money(i.price)}</div></div>`).join('') || `<div class="empty">${items.length ? 'No items match your search.' : 'No items listed yet. Check back soon.'}</div>`}
+  </main><footer>Powered by ShopTrack</footer>`;
+  document.title = shop.name;
+}
+function refocus(){
+  const el = document.getElementById('q');
+  if (el) { el.focus(); el.setSelectionRange(q.length, q.length); }
+}
+async function load(){
+  const root = document.getElementById('root');
+  if (!owner || owner === 'demo') {
+    demo = true;
+    shop = {name:'Sample Mini Mart', phone:'254700000000'};
+    items = [
+      {id:1, name:'Rice 2kg', description:'Pishori, long grain', price:380, in_stock:true},
+      {id:2, name:'Cooking oil 1L', description:'', price:310, in_stock:true},
+      {id:3, name:'Sugar 1kg', description:'', price:190, in_stock:true},
+      {id:4, name:'Bread (white)', description:'Fresh daily', price:70, in_stock:false}
+    ];
+    show(); return;
+  }
+  const [s, l] = await Promise.all([
+    sb.from('shops').select('name,phone').eq('owner', owner).maybeSingle(),
+    sb.from('listings').select('id,name,description,price,in_stock').eq('owner', owner).order('in_stock', {ascending:false}).order('name')
+  ]);
+  if (s.error || l.error) { root.innerHTML = '<div class="empty">Could not load this shop. Please try again later.</div>'; return; }
+  if (!s.data) { root.innerHTML = '<div class="empty">Shop not found.</div>'; return; }
+  shop = s.data; items = l.data; show();
+}
+load();
+setInterval(() => { if (!document.hidden && !q) load(); }, 60000);
+</script>
+</body>
+</html>
