@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0f766e">
+<link rel="icon" href="icon-192.png">
+<title>ShopTrack Marketplace</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--ink:#16202a;--mut:#6b7785;--pri:#0f766e;--bad:#c2410c;--ok:#15803d;--line:#e3e8ee}
+@media(prefers-color-scheme:dark){:root{--bg:#10151a;--card:#1a2129;--ink:#eef2f6;--mut:#93a1b0;--pri:#2dd4bf;--bad:#fb923c;--ok:#4ade80;--line:#2a343f}}
+*{box-sizing:border-box}
+body{margin:0;font:16px system-ui,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
+.live-bg{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
+.blob{position:absolute;width:70vmax;height:70vmax;border-radius:50%;opacity:.28;animation:drift 22s ease-in-out infinite alternate}
+.b1{background:radial-gradient(circle,#14b8a6 0%,transparent 65%);top:-25vmax;left:-20vmax}
+.b2{background:radial-gradient(circle,#fb923c 0%,transparent 65%);bottom:-30vmax;right:-25vmax;animation-duration:28s;animation-delay:-8s}
+@keyframes drift{0%{transform:translate(0,0) scale(1)}50%{transform:translate(8vmax,6vmax) scale(1.12)}100%{transform:translate(-6vmax,10vmax) scale(.95)}}
+@media(prefers-color-scheme:dark){.blob{opacity:.2}}
+@media(prefers-reduced-motion:reduce){.blob{animation:none}}
+.hero{background:linear-gradient(135deg,#0f766e,#134e4a);color:#fff;padding:22px 16px 18px}
+.hero .in{max-width:640px;margin:auto}
+.hero img{width:44px;height:44px;border-radius:12px;display:block;margin-bottom:8px}
+.hero h1{margin:0;font-size:24px}
+.hero p{margin:4px 0 0;opacity:.85;font-size:14px}
+main{max-width:640px;margin:auto;padding:14px}
+input{width:100%;padding:12px;font-size:16px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);margin-bottom:12px}
+h2{font-size:18px;margin:16px 0 8px}
+.cats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.cat{background:color-mix(in srgb,var(--card) 90%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:14px;padding:16px 10px;text-align:center;color:var(--ink);font-size:15px;font-weight:600}
+.cat span{display:block;font-size:30px;margin-bottom:6px}
+.cat small{display:block;color:var(--mut);font-weight:400;margin-top:2px}
+.back{background:none;border:0;color:var(--pri);font-size:15px;font-weight:600;padding:4px 0 10px}
+.item,.shopcard{background:color-mix(in srgb,var(--card) 90%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;display:flex;gap:12px;align-items:center}
+.shopcard{text-decoration:none;color:var(--ink)}
+.pic{width:72px;height:72px;border-radius:10px;object-fit:cover;flex:none;display:block}
+.pic.ph{display:flex;align-items:center;justify-content:center;background:var(--bg);font-size:30px}
+.mid{flex:1;min-width:0}
+.item b,.shopcard b{font-size:17px}
+.item small,.shopcard small{display:block;color:var(--mut);margin-top:2px}
+.item small a{color:var(--pri)}
+.price{font-size:18px;font-weight:700;color:var(--pri);white-space:nowrap}
+.tag{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;margin-top:6px}
+.tag.ok{background:#dcfce7;color:#166534}.tag.no{background:#fee2e2;color:#991b1b}
+a.ord{display:inline-block;margin-top:8px;padding:8px 12px;border-radius:8px;background:#16a34a;color:#fff;text-decoration:none;font-size:14px;font-weight:600}
+.empty{text-align:center;color:var(--mut);padding:30px 10px}
+footer{text-align:center;color:var(--mut);font-size:12px;padding:20px}
+footer a{color:var(--pri)}
+</style>
+</head>
+<body>
+<div class="live-bg" aria-hidden="true"><i class="blob b1"></i><i class="blob b2"></i></div>
+<div class="hero"><div class="in"><img src="icon-192.png" alt=""><h1>ShopTrack Marketplace</h1><p>Find what you need from local sellers</p></div></div>
+<main id="root"><div class="empty">Loading…</div></main>
+<footer>Powered by ShopTrack · <a href="index.html">Sell here</a></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL = 'https://inugsmnlodvfsbkpxuyb.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_cj84eL5811FNFUBZ-xtAXw_5A7-w4KX';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const CATS = [['Groceries','🛒'],['Fruits & Vegetables','🥬'],['Drinks','🥤'],['Household','🧴'],['Electronics','🔌'],['Phones & Accessories','📱'],['Clothing & Shoes','👕'],['Beauty & Health','💄'],['Hardware & Tools','🔧'],['Stationery & School','✏️'],['Other','📦']];
+const catIcon = n => (CATS.find(c => c[0] === n) || CATS[CATS.length - 1])[1];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money = n => 'KSh ' + Number(n || 0).toLocaleString('en-KE', {maximumFractionDigits:2});
+let shops = [], items = [], q = '', cat = '', failed = false;
+const shopById = {};
+
+function itemCard(i){
+  const s = shopById[i.owner];
+  const phone = (s.phone || '').replace(/\D/g, '');
+  return `<div class="item">
+    ${i.image_url ? `<img class="pic" src="${esc(i.image_url)}" alt="" loading="lazy">` : `<div class="pic ph">${catIcon(i.category)}</div>`}
+    <div class="mid"><b>${esc(i.name)}</b>${i.description ? `<small>${esc(i.description)}</small>` : ''}
+    <small>Sold by <a href="shop.html?s=${esc(i.owner)}">${esc(s.name)}</a></small>
+    <span class="tag ${i.in_stock ? 'ok' : 'no'}">${i.in_stock ? 'In stock' : 'Out of stock'}</span>
+    ${phone && i.in_stock ? `<br><a class="ord" target="_blank" rel="noopener" href="https://wa.me/${phone}?text=${encodeURIComponent(`Hi ${s.name}, I found "${i.name}" (${money(i.price)}) on ShopTrack and would like to order.`)}">Order on WhatsApp</a>` : ''}</div>
+    <div class="price">${money(i.price)}</div></div>`;
+}
+function shopCard(s){
+  return `<a class="shopcard" href="shop.html?s=${esc(s.owner)}"><div class="pic ph">${catIcon(s.category)}</div>
+    <div class="mid"><b>${esc(s.name)}</b><small>${esc(s.category || 'Other')} · ${items.filter(i => i.owner === s.owner && i.in_stock).length} items in stock</small></div></a>`;
+}
+
+function show(){
+  const root = document.getElementById('root');
+  if (failed) { root.innerHTML = '<div class="empty">Could not load the marketplace. Please try again later.</div>'; return; }
+  const search = `<input id="q" type="search" placeholder="Search products or shops…" value="${esc(q)}" oninput="q=this.value;show();refocus()">`;
+  const term = q.trim().toLowerCase();
+  if (!cat && !term) {
+    const counts = {};
+    items.forEach(i => { if (i.in_stock) { const c = i.category || 'Other'; counts[c] = (counts[c] || 0) + 1; } });
+    const open = CATS.filter(([n]) => counts[n]);
+    root.innerHTML = search + `<h2>Shop by category</h2>` +
+      (open.length ? `<div class="cats">${open.map(([n,e]) => `<button class="cat" data-c="${esc(n)}" onclick="cat=this.dataset.c;show();scrollTo(0,0)"><span>${e}</span>${esc(n)}<small>${counts[n]} item${counts[n] === 1 ? '' : 's'}</small></button>`).join('')}</div>`
+                 : '<div class="empty">No items listed yet. Check back soon.</div>') +
+      (shops.length ? `<h2>Shops</h2>${shops.map(shopCard).join('')}` : '');
+    return;
+  }
+  let list = items.filter(i => (!cat || (i.category || 'Other') === cat) &&
+    (!term || (i.name + ' ' + (i.description || '') + ' ' + shopById[i.owner].name).toLowerCase().includes(term)));
+  list.sort((a, b) => Number(b.in_stock) - Number(a.in_stock));
+  const sh = shops.filter(s => (!cat || s.category === cat || items.some(i => i.owner === s.owner && (i.category || 'Other') === cat)) &&
+    (!term || s.name.toLowerCase().includes(term)));
+  root.innerHTML = search + `<button class="back" onclick="cat='';q='';show();scrollTo(0,0)">← All categories</button>` +
+    (cat ? `<h2>${catIcon(cat)} ${esc(cat)}</h2>` : '<h2>Results</h2>') +
+    (list.map(itemCard).join('') || '<div class="empty">No items match.</div>') +
+    (sh.length ? `<h2>Shops</h2>${sh.map(shopCard).join('')}` : '');
+}
+function refocus(){
+  const el = document.getElementById('q');
+  if (el) { el.focus(); el.setSelectionRange(q.length, q.length); }
+}
+async function load(){
+  const [s, l] = await Promise.all([
+    sb.from('shops').select('owner,name,phone,category').eq('public_market', true).order('name').limit(500),
+    sb.from('listings').select('id,owner,name,description,price,in_stock,category,image_url').order('created_at', {ascending:false}).limit(1500)
+  ]);
+  if (s.error || l.error) { failed = true; show(); return; }
+  failed = false; shops = s.data;
+  shops.forEach(x => shopById[x.owner] = x);
+  items = l.data.filter(i => shopById[i.owner]);
+  show();
+}
+load();
+setInterval(() => { if (!document.hidden && !q) load(); }, 90000);
+</script>
+</body>
+</html>
