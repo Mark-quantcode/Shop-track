@@ -1,24 +1,23 @@
 <!doctype html>
 <html lang="en">
-  <head>
-  <link rel="manifest" href="manifest.json">
-  <script>
-    if ("serviceWorker" in navigator)
-      navigator.serviceWorker.register("sw.js");
-      </script>
+<head>
+<link rel="manifest" href="manifest.json">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0f766e">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>ShopTrack</title>
 <style>
 :root{--bg:#f4f6f8;--card:#fff;--ink:#16202a;--mut:#6b7785;--pri:#0f766e;--bad:#c2410c;--ok:#15803d;--line:#e3e8ee}
 @media(prefers-color-scheme:dark){:root{--bg:#10151a;--card:#1a2129;--ink:#eef2f6;--mut:#93a1b0;--pri:#2dd4bf;--bad:#fb923c;--ok:#4ade80;--line:#2a343f}}
 *{box-sizing:border-box}
 body{margin:0;font:16px system-ui,sans-serif;background:var(--bg);color:var(--ink);padding-bottom:80px}
-header{background:var(--pri);color:#fff;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:5}
+header{background:var(--pri);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:5}
 @media(prefers-color-scheme:dark){header{color:#06201d}}
-header b{font-size:18px}
-header button{background:transparent;border:1px solid currentColor;color:inherit;border-radius:8px;padding:4px 10px}
+.brand{display:flex;align-items:center;gap:10px;font-size:18px;font-weight:700}
+.brand img{width:30px;height:30px;border-radius:8px;object-fit:cover}
+.avatar{width:36px;height:36px;border-radius:50%;border:2px solid currentColor;background:transparent;color:inherit;font-size:16px;font-weight:700;padding:0}
 main{padding:14px;max-width:640px;margin:auto}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -29,38 +28,71 @@ label{display:block;font-size:13px;color:var(--mut);margin:8px 0 4px}
 input,select{width:100%;padding:12px;font-size:16px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)}
 button.p{width:100%;margin-top:12px;padding:13px;font-size:16px;font-weight:600;border:0;border-radius:10px;background:var(--pri);color:#fff}
 @media(prefers-color-scheme:dark){button.p{color:#06201d}}
+button.p.o{background:transparent;color:var(--pri);border:1px solid var(--pri)}
+button.p.g{background:transparent;color:var(--mut);border:1px solid var(--line)}
 button.s{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:8px;padding:6px 10px;font-size:13px;margin-left:6px}
 button.s.d{color:var(--bad)}
 .row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);gap:8px}
 .row:last-child{border:0}
 .row small{color:var(--mut);display:block}
 nav{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom)}
-nav button{flex:1;padding:12px 0;border:0;background:transparent;color:var(--mut);font-size:12px}
+nav button{flex:1;padding:12px 0;border:0;background:transparent;color:var(--mut);font-size:11px}
 nav button.on{color:var(--pri);font-weight:700}
-.msg{padding:10px;border-radius:8px;margin-top:10px;font-size:14px}
-.msg.e{background:#fee2e2;color:#991b1b}.msg.g{background:#dcfce7;color:#166534}
 h3{margin:4px 0 8px}
 #toast{position:fixed;left:12px;right:12px;bottom:90px;padding:12px 14px;border-radius:10px;font-size:15px;z-index:20;display:none;box-shadow:0 4px 14px rgba(0,0,0,.25)}
 #toast.show{display:block}#toast.e{background:#991b1b;color:#fff}#toast.g{background:#166534;color:#fff}
 .tabs{display:flex;gap:6px;margin-bottom:12px}
 .tabs button{flex:1;padding:9px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
 .tabs button.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+@media(prefers-color-scheme:dark){.tabs button.on{color:#06201d}}
+/* dashboard */
+.hero{background:linear-gradient(135deg,#0f766e,#134e4a);color:#fff;border-radius:16px;padding:18px;margin-bottom:12px}
+.hero h2{margin:0 0 2px;font-size:22px}
+.hero p{margin:0;opacity:.85;font-size:14px}
+.hero .big{margin-top:14px;font-size:13px;opacity:.85}
+.hero .big b{display:block;font-size:28px;opacity:1}
+.qa{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+.qa button{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 4px;color:var(--ink);font-size:13px;font-weight:600}
+.qa button span{display:block;font-size:22px;margin-bottom:4px}
+.bars{display:flex;align-items:flex-end;gap:8px;height:96px;margin-top:8px}
+.bars div{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;gap:4px}
+.bars i{display:block;width:100%;background:var(--pri);border-radius:6px 6px 2px 2px;opacity:.85;min-height:3px}
+.bars i.t{opacity:1}
+.bars small{color:var(--mut);font-size:11px}
+.steps{margin:0;padding-left:20px;color:var(--mut);line-height:1.7}
+.tog{display:flex;gap:6px;margin:10px 0 4px}
+.tog button{flex:1;padding:10px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--mut);font-weight:600}
+.tog button.on{background:var(--pri);border-color:var(--pri);color:#fff}
+@media(prefers-color-scheme:dark){.tog button.on{color:#06201d}}
+.logo{display:block;width:64px;height:64px;border-radius:16px;margin:4px 0 8px;object-fit:cover}
+/* live animated background */
+.live-bg{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
+.blob{position:absolute;width:70vmax;height:70vmax;border-radius:50%;opacity:.28;will-change:transform;animation:drift 22s ease-in-out infinite alternate}
+.blob.b1{background:radial-gradient(circle,#14b8a6 0%,transparent 65%);top:-25vmax;left:-20vmax}
+.blob.b2{background:radial-gradient(circle,#fb923c 0%,transparent 65%);bottom:-30vmax;right:-25vmax;animation-duration:28s;animation-delay:-8s}
+.blob.b3{background:radial-gradient(circle,#2dd4bf 0%,transparent 65%);top:30%;left:35%;width:50vmax;height:50vmax;opacity:.18;animation-duration:34s;animation-delay:-15s}
+@keyframes drift{0%{transform:translate(0,0) scale(1)}50%{transform:translate(8vmax,6vmax) scale(1.12)}100%{transform:translate(-6vmax,10vmax) scale(.95)}}
+@media(prefers-color-scheme:dark){.blob{opacity:.2}.blob.b3{opacity:.12}}
+@media(prefers-reduced-motion:reduce){.blob{animation:none}}
+.card{background:color-mix(in srgb,var(--card) 90%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
 </style>
 </head>
 <body>
+<div class="live-bg" aria-hidden="true"><i class="blob b1"></i><i class="blob b2"></i><i class="blob b3"></i></div>
 <div id="app"></div>
 <div id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-// ====== PASTE YOUR SUPABASE DETAILS HERE (Project Settings > API) ======
+// ====== SUPABASE DETAILS (Project Settings > API) ======
 const SUPABASE_URL = 'https://inugsmnlodvfsbkpxuyb.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_cj84eL5811FNFUBZ-xtAXw_5A7-w4KX';
-// ========================================================================
+// ========================================================
 
 const CONFIGURED = /^https?:\/\//.test(SUPABASE_URL) && SUPABASE_KEY.length > 20 && !SUPABASE_KEY.startsWith('PASTE');
 const sb = CONFIGURED ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
-const S = { user:null, view:'home', products:[], sales:[], expenses:[], period:'today', editing:null, msg:null };
+const S = { user:null, view:'home', products:[], sales:[], expenses:[], period:'today', editing:null, authMode:'in',
+  shop:null, listings:[], catalogErr:null, editingL:null };
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money = n => 'KSh ' + Number(n || 0).toLocaleString('en-KE', {maximumFractionDigits:2});
@@ -77,7 +109,20 @@ function flash(text, type='g'){
   const t = $('toast'); t.textContent = text; t.className = 'show ' + type;
   clearTimeout(flash.t); flash.t = setTimeout(() => { t.className = ''; }, 4000);
 }
-const msgHtml = () => '';
+
+// ---------- Name & greeting ----------
+function displayName(u = S.user){
+  const un = (u?.user_metadata?.username || '').trim();
+  if (un) return un;
+  const local = (u?.email || '').split('@')[0] || '';
+  const word = (local.match(/^[A-Za-z]+/) || [local])[0];
+  return word ? word.charAt(0).toUpperCase() + word.slice(1).toLowerCase() : 'there';
+}
+function greeting(){
+  const h = new Date().getHours();
+  return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+}
+const todayLabel = () => new Date().toLocaleDateString('en-KE', {weekday:'long', day:'numeric', month:'long'});
 
 async function load(){
   const since = new Date(); since.setDate(since.getDate() - 62);
@@ -89,30 +134,57 @@ async function load(){
   if (p.error || s.error || e.error) return flash((p.error||s.error||e.error).message, 'e');
   S.products = p.data; S.sales = s.data; S.expenses = e.data;
   render();
+  loadCatalog();
 }
 
 // ---------- Auth ----------
+function setMode(m){
+  const em = $('em')?.value || '', pw = $('pw')?.value || '', un = $('un')?.value || '';
+  S.authMode = m; render();
+  $('em').value = em; $('pw').value = pw; if ($('un')) $('un').value = un;
+}
 function authView(){
-  return `<main><div class="card"><h3>ShopTrack</h3>
+  const up = S.authMode === 'up';
+  return `<main><div class="card">
+  <img class="logo" src="icon-192.png" alt="">
+  <h3>ShopTrack</h3>
   <small style="color:var(--mut)">Stock, sales and expenses in your pocket.</small>
+  <div class="tog"><button class="${up?'':'on'}" onclick="setMode('in')">Sign in</button><button class="${up?'on':''}" onclick="setMode('up')">Create account</button></div>
+  ${up ? `<label>Username (shown in your greeting)</label><input id="un" maxlength="20" autocomplete="nickname" placeholder="e.g. Mark">` : ''}
   <label>Email</label><input id="em" type="email" autocomplete="email">
-  <label>Password (min 6 characters)</label><input id="pw" type="password" autocomplete="current-password">
-  <button class="p" onclick="signIn()">Sign in</button>
-  <button class="p" style="background:transparent;color:var(--pri);border:1px solid var(--pri)" onclick="signUp()">Create account</button>
-  ${msgHtml()}</div></main>`;
+  <label>Password (min 6 characters)</label><input id="pw" type="password" autocomplete="${up?'new-password':'current-password'}">
+  <button class="p" onclick="${up?'signUp()':'signIn()'}">${up?'Create account':'Sign in'}</button>
+  </div></main>`;
 }
 async function signIn(){
   const {error} = await sb.auth.signInWithPassword({email:$('em').value.trim(), password:$('pw').value});
   if (error) flash(error.message, 'e');
 }
 async function signUp(){
-  const {data, error} = await sb.auth.signUp({email:$('em').value.trim(), password:$('pw').value});
+  const username = ($('un').value || '').trim();
+  if (username.length < 2) return flash('Choose a username (at least 2 characters).', 'e');
+  const {data, error} = await sb.auth.signUp({
+    email:$('em').value.trim(), password:$('pw').value,
+    options:{ data:{ username } }
+  });
   if (error) return flash(error.message, 'e');
-  if (!data.session) flash('Account created. Check your email to confirm, then sign in.');
+  if (!data.session) { S.authMode = 'in'; render(); flash('Account created. Check your email to confirm, then sign in.'); }
 }
 async function signOut(){ await sb.auth.signOut(); }
 
 // ---------- Views ----------
+function weekBars(){
+  const days = [];
+  for (let i = 6; i >= 0; i--) { const d = sod(); d.setDate(d.getDate() - i); days.push({d, total:0}); }
+  S.sales.forEach(r => {
+    const k = sod(r.created_at).getTime();
+    const day = days.find(x => x.d.getTime() === k);
+    if (day) day.total += Number(r.total_amount);
+  });
+  const max = Math.max(...days.map(x => x.total), 1);
+  return `<div class="bars">${days.map((x,i) => `<div title="${money(x.total)}"><i class="${i===6?'t':''}" style="height:${Math.max(3, x.total/max*100)}%"></i><small>${x.d.toLocaleDateString('en-KE',{weekday:'narrow'})}</small></div>`).join('')}</div>`;
+}
+
 function homeView(){
   const ts = S.sales.filter(r => inPeriod(r,'today')), te = S.expenses.filter(r => inPeriod(r,'today'));
   const sales = ts.reduce((a,r)=>a+Number(r.total_amount),0);
@@ -120,14 +192,31 @@ function homeView(){
   const exp = te.reduce((a,r)=>a+Number(r.amount),0);
   const net = profit - exp;
   const low = S.products.filter(p => p.stock_qty <= p.low_stock_alert);
-  return `<div class="card"><h3>Today</h3><div class="grid">
-    <div class="stat"><small>Sales</small><b>${money(sales)}</b></div>
+  const stockValue = S.products.reduce((a,p)=>a+Number(p.buying_price)*Number(p.stock_qty),0);
+  const recent = S.sales.slice(0,5);
+  const hero = `<div class="hero"><h2>${greeting()}, ${esc(displayName())} 👋</h2><p>${todayLabel()}</p>
+    <div class="big">Today's sales<b>${money(sales)}</b>${ts.length} sale${ts.length===1?'':'s'} recorded</div></div>`;
+  const qa = `<div class="qa">
+    <button onclick="go('sell')"><span>🛒</span>Sell</button>
+    <button onclick="go('stock')"><span>📦</span>Add product</button>
+    <button onclick="go('exp')"><span>💸</span>Add expense</button></div>`;
+  if (!S.products.length) {
+    return hero + `<div class="card"><h3>Get started</h3>
+      <ol class="steps"><li>Add your products in <b>Stock</b></li><li>Record sales as they happen in <b>Sell</b></li><li>Log costs like rent and transport in <b>Expenses</b></li><li>Watch your profit here and in <b>Reports</b></li></ol>
+      <button class="p" onclick="go('stock')">Add your first product</button></div>`;
+  }
+  return hero + qa + `<div class="card"><h3>Today</h3><div class="grid">
     <div class="stat"><small>Gross profit</small><b class="ok">${money(profit)}</b></div>
     <div class="stat"><small>Expenses</small><b class="bad">${money(exp)}</b></div>
-    <div class="stat"><small>Net profit</small><b class="${net>=0?'ok':'bad'}">${money(net)}</b></div></div></div>
+    <div class="stat"><small>Net profit</small><b class="${net>=0?'ok':'bad'}">${money(net)}</b></div>
+    <div class="stat"><small>Stock value (at cost)</small><b>${money(stockValue)}</b></div></div></div>
+  <div class="card"><h3>Last 7 days</h3><small style="color:var(--mut)">Daily sales</small>${weekBars()}</div>
   <div class="card"><h3>Low stock ${low.length ? '('+low.length+')' : ''}</h3>
-  ${low.length ? low.map(p=>`<div class="row"><span>${esc(p.name)}</span><b class="bad">${p.stock_qty} left</b></div>`).join('') : '<small style="color:var(--mut)">Everything is well stocked.</small>'}</div>`;
+  ${low.length ? low.map(p=>`<div class="row"><span>${esc(p.name)}</span><b class="bad">${p.stock_qty} left</b></div>`).join('') : '<small style="color:var(--mut)">Everything is well stocked.</small>'}</div>
+  <div class="card"><h3>Recent sales</h3>
+  ${recent.map(r=>`<div class="row"><div><b>${esc(r.product_name)} × ${r.quantity}</b><small>${new Date(r.created_at).toLocaleString()}</small></div><b>${money(r.total_amount)}</b></div>`).join('') || '<small style="color:var(--mut)">No sales yet. Tap Sell to record your first.</small>'}</div>`;
 }
+function go(v){ S.view = v; S.editing = null; render(); scrollTo(0,0); }
 
 function sellView(){
   if (!S.products.length) return `<div class="card">Add products in the Stock tab first.</div>`;
@@ -136,8 +225,8 @@ function sellView(){
     ${S.products.map(p=>`<option value="${p.id}">${esc(p.name)} (${p.stock_qty} in stock)</option>`).join('')}</select>
   <label>Quantity</label><input id="sq" type="number" inputmode="numeric" min="1" value="1">
   <label>Selling price each</label><input id="su" type="number" inputmode="decimal" min="0" step="any">
-  <label>Recorded by</label><input id="sr" value="Owner">
-  <button class="p" onclick="addSale()">Save sale</button>${msgHtml()}</div>`;
+  <label>Recorded by</label><input id="sr" value="${esc(displayName())}">
+  <button class="p" onclick="addSale()">Save sale</button></div>`;
 }
 function fillPrice(){
   const p = S.products.find(x => x.id === $('sp').value);
@@ -163,8 +252,7 @@ function stockView(){
   <div><label>Stock quantity</label><input id="pq" type="number" inputmode="numeric" value="${e?.stock_qty ?? ''}"></div>
   <div><label>Low-stock alert at</label><input id="pl" type="number" inputmode="numeric" value="${e?.low_stock_alert ?? 5}"></div></div>
   <button class="p" onclick="saveProduct()">${e ? 'Update' : 'Add product'}</button>
-  ${e ? `<button class="p" style="background:transparent;color:var(--mut);border:1px solid var(--line)" onclick="S.editing=null;render()">Cancel</button>` : ''}
-  ${msgHtml()}</div>
+  ${e ? `<button class="p g" onclick="S.editing=null;render()">Cancel</button>` : ''}</div>
   <div class="card"><h3>Products (${S.products.length})</h3>
   ${S.products.map(p=>`<div class="row"><div><b>${esc(p.name)}</b><small>Buy ${money(p.buying_price)} · Sell ${money(p.selling_price)}</small></div>
     <div style="text-align:right"><b class="${p.stock_qty<=p.low_stock_alert?'bad':''}">${p.stock_qty}</b>
@@ -192,8 +280,8 @@ function expensesView(){
   return `<div class="card"><h3>Add expense</h3>
   <label>Description</label><input id="ed" placeholder="Rent, transport, electricity...">
   <label>Amount</label><input id="ea" type="number" inputmode="decimal" step="any">
-  <label>Recorded by</label><input id="er" value="Owner">
-  <button class="p" onclick="addExpense()">Save expense</button>${msgHtml()}</div>
+  <label>Recorded by</label><input id="er" value="${esc(displayName())}">
+  <button class="p" onclick="addExpense()">Save expense</button></div>
   <div class="card"><h3>Recent expenses</h3>
   ${list.map(x=>`<div class="row"><div><b>${esc(x.description)}</b><small>${new Date(x.created_at).toLocaleString()} · ${esc(x.recorded_by)}</small></div>
     <div><b class="bad">${money(x.amount)}</b><button class="s d" onclick="delExpense('${x.id}')">Del</button></div></div>`).join('') || '<small style="color:var(--mut)">None yet.</small>'}</div>`;
@@ -229,8 +317,7 @@ function reportsView(){
   <div class="card"><h3>Sales (${rs.length})</h3>
   ${rs.map(r=>`<div class="row"><div><b>${esc(r.product_name)} × ${r.quantity}</b><small>${new Date(r.created_at).toLocaleString()} · ${esc(r.recorded_by)}</small></div>
     <div style="text-align:right"><b>${money(r.total_amount)}</b><small class="ok">+${money(r.profit)}</small>
-    <button class="s d" onclick="delSale('${r.id}')">Del</button></div></div>`).join('') || '<small style="color:var(--mut)">No sales in this period.</small>'}
-  ${msgHtml()}</div>`;
+    <button class="s d" onclick="delSale('${r.id}')">Del</button></div></div>`).join('') || '<small style="color:var(--mut)">No sales in this period.</small>'}</div>`;
 }
 async function delSale(id){
   if (!confirm('Delete this sale? The stock will be put back.')) return;
@@ -239,32 +326,152 @@ async function delSale(id){
   await load();
 }
 
+// ---------- Online catalog ----------
+const shopLink = () => new URL('shop.html', location.href).href + '?s=' + S.user.id;
+
+async function loadCatalog(){
+  if (!S.user) return;
+  const [sh, ls] = await Promise.all([
+    sb.from('shops').select('*').eq('owner', S.user.id).maybeSingle(),
+    sb.from('listings').select('*').eq('owner', S.user.id).order('created_at', {ascending:false})
+  ]);
+  if (sh.error || ls.error) { S.catalogErr = (sh.error || ls.error).message; S.shop = null; S.listings = []; render(); return; }
+  S.catalogErr = null; S.shop = sh.data; S.listings = ls.data;
+  // items listed from Stock follow their stock level automatically
+  for (const l of S.listings) {
+    const p = l.product_id && S.products.find(x => x.id === l.product_id);
+    if (p && l.in_stock !== (p.stock_qty > 0)) {
+      l.in_stock = p.stock_qty > 0;
+      sb.from('listings').update({in_stock: l.in_stock}).eq('id', l.id).then(() => {});
+    }
+  }
+  render();
+}
+
+function catalogView(){
+  if (S.catalogErr) return `<div class="card"><h3>Online shop</h3>
+    <p style="color:var(--mut)">The online shop tables are not set up yet. Run the catalog SQL in Supabase (SQL Editor), then reopen the app.</p>
+    <small class="bad">${esc(S.catalogErr)}</small></div>`;
+  const sh = S.shop;
+  const e = S.editingL ? S.listings.find(l => l.id === S.editingL) : null;
+  const listed = new Set(S.listings.map(l => l.product_id).filter(Boolean));
+  const avail = S.products.filter(p => !listed.has(p.id));
+  const shopCard = `<div class="card"><h3>Your online shop</h3>
+    <label>Shop name</label><input id="shn" maxlength="40" value="${esc(sh?.name)}" placeholder="e.g. Mark's Mini Mart">
+    <label>WhatsApp number for orders (with country code, e.g. 2547...)</label><input id="shp" type="tel" inputmode="tel" value="${esc(sh?.phone)}">
+    <button class="p" onclick="saveShop()">${sh ? 'Update shop' : 'Create my online shop'}</button></div>`;
+  if (!sh) return shopCard + `<div class="card"><small style="color:var(--mut)">Create your shop to get a public link customers can open without an account. Only the items you list and the details above are public.</small></div>`;
+  return shopCard + `<div class="card"><h3>Share your shop</h3>
+    <small style="color:var(--mut)">Customers open this link, no account needed.</small>
+    <input readonly value="${esc(shopLink())}" onclick="this.select()" style="margin-top:8px">
+    <div class="grid"><button class="p" onclick="copyLink()">Copy link</button><button class="p o" onclick="shareLink()">Share on WhatsApp</button></div>
+    <button class="p g" onclick="window.open(shopLink(),'_blank')">Preview shop</button></div>
+  <div class="card"><h3>${e ? 'Edit item' : 'Add an item to your online shop'}</h3>
+    <label>Item name</label><input id="ln" value="${esc(e?.name)}">
+    <label>Price (KSh)</label><input id="lp" type="number" inputmode="decimal" step="any" value="${e?.price ?? ''}">
+    <label>Description (optional)</label><input id="ld" maxlength="120" value="${esc(e?.description)}">
+    <button class="p" onclick="saveListing()">${e ? 'Update item' : 'Add item'}</button>
+    ${e ? `<button class="p g" onclick="S.editingL=null;render()">Cancel</button>` : ''}</div>
+  ${avail.length ? `<div class="card"><h3>Add from your stock</h3>
+    <small style="color:var(--mut)">Availability then follows your stock automatically.</small>
+    ${avail.map(p => `<div class="row"><div><b>${esc(p.name)}</b><small>${money(p.selling_price)} · ${p.stock_qty} in stock</small></div>
+      <button class="s" onclick="listFromStock('${p.id}')">List online</button></div>`).join('')}</div>` : ''}
+  <div class="card"><h3>Online items (${S.listings.length})</h3>
+  ${S.listings.map(l => `<div class="row"><div><b>${esc(l.name)}</b>
+    <small>${money(l.price)} · <span class="${l.in_stock ? 'ok' : 'bad'}">${l.in_stock ? 'In stock' : 'Out of stock'}</span>${l.product_id ? ' · auto from Stock' : ''}</small></div>
+    <div>${l.product_id ? '' : `<button class="s" onclick="toggleListing('${l.id}')">${l.in_stock ? 'Mark out' : 'Mark in'}</button>`}
+    <button class="s" onclick="S.editingL='${l.id}';render();scrollTo(0,0)">Edit</button>
+    <button class="s d" onclick="delListing('${l.id}')">Del</button></div></div>`).join('') || '<small style="color:var(--mut)">Nothing listed yet.</small>'}</div>`;
+}
+async function saveShop(){
+  const name = $('shn').value.trim(), phone = $('shp').value.replace(/\D/g, '');
+  if (name.length < 2) return flash('Enter your shop name.', 'e');
+  const {error} = await sb.from('shops').upsert({owner:S.user.id, name, phone: phone || null}, {onConflict:'owner'});
+  if (error) return flash(error.message, 'e');
+  await loadCatalog(); flash('Shop saved.');
+}
+async function saveListing(){
+  if (!S.shop) return flash('Create your shop first.', 'e');
+  const row = {name: $('ln').value.trim(), price: parseFloat($('lp').value), description: $('ld').value.trim() || null};
+  if (!row.name) return flash('Enter the item name.', 'e');
+  if (!(row.price >= 0)) return flash('Enter a valid price.', 'e');
+  const {error} = S.editingL ? await sb.from('listings').update(row).eq('id', S.editingL) : await sb.from('listings').insert({...row, in_stock:true});
+  if (error) return flash(error.message, 'e');
+  S.editingL = null; await loadCatalog(); flash('Item saved.');
+}
+async function listFromStock(id){
+  const p = S.products.find(x => x.id === id); if (!p) return;
+  const {error} = await sb.from('listings').insert({product_id:p.id, name:p.name, price:p.selling_price, in_stock:p.stock_qty > 0});
+  if (error) return flash(error.message, 'e');
+  await loadCatalog(); flash('Listed online.');
+}
+async function toggleListing(id){
+  const l = S.listings.find(x => x.id === id); if (!l) return;
+  const {error} = await sb.from('listings').update({in_stock: !l.in_stock}).eq('id', id);
+  if (error) return flash(error.message, 'e');
+  await loadCatalog();
+}
+async function delListing(id){
+  if (!confirm('Remove this item from your online shop?')) return;
+  const {error} = await sb.from('listings').delete().eq('id', id);
+  if (error) return flash(error.message, 'e');
+  await loadCatalog();
+}
+function copyLink(){
+  const link = shopLink();
+  if (navigator.clipboard) navigator.clipboard.writeText(link).then(() => flash('Link copied.'), () => prompt('Copy this link:', link));
+  else prompt('Copy this link:', link);
+}
+function shareLink(){
+  const text = `${S.shop.name} is open online. Browse and order here: ${shopLink()}`;
+  window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+}
+
+function profileView(){
+  return `<div class="card"><h3>Your profile</h3>
+  <label>Email</label><input value="${esc(S.user.email)}" disabled>
+  <label>Username (shown in your greeting)</label><input id="pu" maxlength="20" value="${esc(S.user.user_metadata?.username || '')}" placeholder="${esc(displayName())}">
+  <button class="p" onclick="saveProfile()">Save username</button>
+  <button class="p o" onclick="signOut()">Sign out</button></div>`;
+}
+async function saveProfile(){
+  const username = $('pu').value.trim();
+  if (username.length < 2) return flash('Username must be at least 2 characters.', 'e');
+  const {data, error} = await sb.auth.updateUser({data:{username}});
+  if (error) return flash(error.message, 'e');
+  S.user = data.user; flash('Username saved.'); go('home');
+}
+
 // ---------- Shell ----------
 function render(){
   const app = $('app');
   if (!S.user) { app.innerHTML = authView(); return; }
-  const views = {home:homeView, sell:sellView, stock:stockView, exp:expensesView, rep:reportsView};
-  const nav = [['home','🏠','Home'],['sell','🛒','Sell'],['stock','📦','Stock'],['exp','💸','Expenses'],['rep','📊','Reports']];
-  const keep = document.activeElement?.id;
-  app.innerHTML = `<header><b>ShopTrack</b><button onclick="signOut()">Sign out</button></header>
+  const views = {home:homeView, sell:sellView, stock:stockView, exp:expensesView, rep:reportsView, cat:catalogView, me:profileView};
+  const nav = [['home','🏠','Home'],['sell','🛒','Sell'],['stock','📦','Stock'],['cat','🌐','Online'],['exp','💸','Expenses'],['rep','📊','Reports']];
+  app.innerHTML = `<header><div class="brand"><img src="icon-192.png" alt="">ShopTrack</div>
+  <button class="avatar" onclick="go('me')" aria-label="Profile">${esc(displayName().charAt(0).toUpperCase())}</button></header>
   <main>${views[S.view]()}</main>
-  <nav>${nav.map(([k,i,l])=>`<button class="${S.view===k?'on':''}" onclick="S.view='${k}';S.editing=null;render()">${i}<br>${l}</button>`).join('')}</nav>`;
+  <nav>${nav.map(([k,i,l])=>`<button class="${S.view===k?'on':''}" onclick="go('${k}')">${i}<br>${l}</button>`).join('')}</nav>`;
   if (S.view === 'sell' && $('sp') && !$('su').value) fillPrice();
 }
 
 if (!CONFIGURED) {
   $('app').innerHTML = `<main><div class="card"><h3>Setup needed</h3>
-  <p>Open <b>index.html</b> in a text editor and replace <b>PASTE_YOUR_PROJECT_URL</b> and <b>PASTE_YOUR_ANON_PUBLIC_KEY</b> with the values from Supabase → Project Settings → API. Keep the quotes.</p></div></main>`;
+  <p>Open <b>index.html</b> in a text editor and replace the Supabase URL and key near the top with the values from Supabase → Project Settings → API. Keep the quotes.</p></div></main>`;
 } else {
   let lastUid = null;
   sb.auth.onAuthStateChange((_e, session) => {
     // setTimeout avoids a supabase-js deadlock when calling the API inside this callback
     setTimeout(() => {
       S.user = session?.user ?? null;
-      if (S.user) { if (S.user.id !== lastUid) { lastUid = S.user.id; load(); } }
+      if (S.user) { if (S.user.id !== lastUid) { lastUid = S.user.id; S.view = 'home'; load(); } }
       else { lastUid = null; S.products = []; S.sales = []; S.expenses = []; render(); }
     }, 0);
   });
+}
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js"));
 }
 </script>
 </body>
