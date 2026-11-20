@@ -65,6 +65,8 @@ h3{margin:4px 0 8px}
 .tog button.on{background:var(--pri);border-color:var(--pri);color:#fff}
 @media(prefers-color-scheme:dark){.tog button.on{color:#06201d}}
 .logo{display:block;width:64px;height:64px;border-radius:16px;margin:4px 0 8px;object-fit:cover}
+.thumb{width:48px;height:48px;border-radius:8px;object-fit:cover;flex:none;display:block}
+.thumb.ph{display:flex;align-items:center;justify-content:center;background:var(--bg);font-size:22px}
 /* live animated background */
 .live-bg{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
 .blob{position:absolute;width:70vmax;height:70vmax;border-radius:50%;opacity:.28;will-change:transform;animation:drift 22s ease-in-out infinite alternate}
@@ -154,6 +156,7 @@ function authView(){
   <label>Email</label><input id="em" type="email" autocomplete="email">
   <label>Password (min 6 characters)</label><input id="pw" type="password" autocomplete="${up?'new-password':'current-password'}">
   <button class="p" onclick="${up?'signUp()':'signIn()'}">${up?'Create account':'Sign in'}</button>
+  <p style="text-align:center;margin:16px 0 0"><a href="market.html" style="color:var(--pri);font-weight:600;text-decoration:none">🛍️ Buying? Browse the marketplace</a></p>
   </div></main>`;
 }
 async function signIn(){
@@ -327,7 +330,40 @@ async function delSale(id){
 }
 
 // ---------- Online catalog ----------
+const CATS = [['Groceries','🛒'],['Fruits & Vegetables','🥬'],['Drinks','🥤'],['Household','🧴'],['Electronics','🔌'],['Phones & Accessories','📱'],['Clothing & Shoes','👕'],['Beauty & Health','💄'],['Hardware & Tools','🔧'],['Stationery & School','✏️'],['Other','📦']];
+const catOptions = sel => CATS.map(([n,e]) => `<option value="${esc(n)}" ${n===sel?'selected':''}>${e} ${esc(n)}</option>`).join('');
+const catIcon = n => (CATS.find(c => c[0] === n) || CATS[CATS.length - 1])[1];
+const IMG_BUCKET = 'listing-images';
 const shopLink = () => new URL('shop.html', location.href).href + '?s=' + S.user.id;
+const marketLink = () => new URL('market.html', location.href).href;
+
+// shrink photos on the phone before uploading (saves data)
+function compressImage(file, max = 800, q = 0.8){
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const r = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * r); c.height = Math.round(img.height * r);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      c.toBlob(b => b ? res(b) : rej(new Error('Could not process the photo.')), 'image/jpeg', q);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Could not read that photo.')); };
+    img.src = url;
+  });
+}
+async function uploadImage(file){
+  const blob = await compressImage(file);
+  const path = `${S.user.id}/${crypto.randomUUID()}.jpg`;
+  const {error} = await sb.storage.from(IMG_BUCKET).upload(path, blob, {contentType:'image/jpeg'});
+  if (error) throw error;
+  return sb.storage.from(IMG_BUCKET).getPublicUrl(path).data.publicUrl;
+}
+function removeImage(url){
+  const part = String(url || '').split('/' + IMG_BUCKET + '/')[1];
+  if (part) sb.storage.from(IMG_BUCKET).remove([decodeURIComponent(part.split('?')[0])]).then(() => {});
+}
 
 async function loadCatalog(){
   if (!S.user) return;
@@ -350,7 +386,7 @@ async function loadCatalog(){
 
 function catalogView(){
   if (S.catalogErr) return `<div class="card"><h3>Online shop</h3>
-    <p style="color:var(--mut)">The online shop tables are not set up yet. Run the catalog SQL in Supabase (SQL Editor), then reopen the app.</p>
+    <p style="color:var(--mut)">The online shop is not fully set up yet. Run the latest catalog SQL in Supabase (SQL Editor), then reopen the app.</p>
     <small class="bad">${esc(S.catalogErr)}</small></div>`;
   const sh = S.shop;
   const e = S.editingL ? S.listings.find(l => l.id === S.editingL) : null;
@@ -358,50 +394,70 @@ function catalogView(){
   const avail = S.products.filter(p => !listed.has(p.id));
   const shopCard = `<div class="card"><h3>Your online shop</h3>
     <label>Shop name</label><input id="shn" maxlength="40" value="${esc(sh?.name)}" placeholder="e.g. Mark's Mini Mart">
+    <label>Shop category (what you mainly sell)</label><select id="shc">${catOptions(sh?.category || 'Groceries')}</select>
     <label>WhatsApp number for orders (with country code, e.g. 2547...)</label><input id="shp" type="tel" inputmode="tel" value="${esc(sh?.phone)}">
+    <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input id="shm" type="checkbox" style="width:auto" ${!sh || sh.public_market ? 'checked' : ''}> Show my shop in the marketplace</label>
     <button class="p" onclick="saveShop()">${sh ? 'Update shop' : 'Create my online shop'}</button></div>`;
   if (!sh) return shopCard + `<div class="card"><small style="color:var(--mut)">Create your shop to get a public link customers can open without an account. Only the items you list and the details above are public.</small></div>`;
   return shopCard + `<div class="card"><h3>Share your shop</h3>
     <small style="color:var(--mut)">Customers open this link, no account needed.</small>
     <input readonly value="${esc(shopLink())}" onclick="this.select()" style="margin-top:8px">
     <div class="grid"><button class="p" onclick="copyLink()">Copy link</button><button class="p o" onclick="shareLink()">Share on WhatsApp</button></div>
-    <button class="p g" onclick="window.open(shopLink(),'_blank')">Preview shop</button></div>
+    <div class="grid"><button class="p g" onclick="window.open(shopLink(),'_blank')">Preview shop</button><button class="p g" onclick="window.open(marketLink(),'_blank')">Open marketplace</button></div></div>
   <div class="card"><h3>${e ? 'Edit item' : 'Add an item to your online shop'}</h3>
     <label>Item name</label><input id="ln" value="${esc(e?.name)}">
-    <label>Price (KSh)</label><input id="lp" type="number" inputmode="decimal" step="any" value="${e?.price ?? ''}">
+    <label>Category</label><select id="lc">${catOptions(e?.category || sh.category || 'Groceries')}</select>
+    <label>Current price (KSh)</label><input id="lp" type="number" inputmode="decimal" step="any" value="${e?.price ?? ''}">
     <label>Description (optional)</label><input id="ld" maxlength="120" value="${esc(e?.description)}">
+    <label>Photo (optional)</label>${e?.image_url ? `<img class="thumb" src="${esc(e.image_url)}" alt="" style="margin-bottom:6px">` : ''}
+    <input id="li" type="file" accept="image/*">
     <button class="p" onclick="saveListing()">${e ? 'Update item' : 'Add item'}</button>
     ${e ? `<button class="p g" onclick="S.editingL=null;render()">Cancel</button>` : ''}</div>
   ${avail.length ? `<div class="card"><h3>Add from your stock</h3>
-    <small style="color:var(--mut)">Availability then follows your stock automatically.</small>
+    <small style="color:var(--mut)">Availability then follows your stock automatically. You can add a photo later with Edit.</small>
+    <label>Category for the items you list</label><select id="lsc">${catOptions(sh.category || 'Groceries')}</select>
     ${avail.map(p => `<div class="row"><div><b>${esc(p.name)}</b><small>${money(p.selling_price)} · ${p.stock_qty} in stock</small></div>
       <button class="s" onclick="listFromStock('${p.id}')">List online</button></div>`).join('')}</div>` : ''}
   <div class="card"><h3>Online items (${S.listings.length})</h3>
-  ${S.listings.map(l => `<div class="row"><div><b>${esc(l.name)}</b>
-    <small>${money(l.price)} · <span class="${l.in_stock ? 'ok' : 'bad'}">${l.in_stock ? 'In stock' : 'Out of stock'}</span>${l.product_id ? ' · auto from Stock' : ''}</small></div>
-    <div>${l.product_id ? '' : `<button class="s" onclick="toggleListing('${l.id}')">${l.in_stock ? 'Mark out' : 'Mark in'}</button>`}
+  ${S.listings.map(l => `<div class="row"><div style="display:flex;gap:10px;align-items:center">
+    ${l.image_url ? `<img class="thumb" src="${esc(l.image_url)}" alt="" loading="lazy">` : `<div class="thumb ph">${catIcon(l.category)}</div>`}
+    <div><b>${esc(l.name)}</b>
+    <small>${money(l.price)} · <span class="${l.in_stock ? 'ok' : 'bad'}">${l.in_stock ? 'In stock' : 'Out of stock'}</span></small>
+    <small>${esc(l.category || 'Other')}${l.product_id ? ' · auto from Stock' : ''}</small></div></div>
+    <div style="text-align:right">${l.product_id ? '' : `<button class="s" onclick="toggleListing('${l.id}')">${l.in_stock ? 'Mark out' : 'Mark in'}</button>`}
     <button class="s" onclick="S.editingL='${l.id}';render();scrollTo(0,0)">Edit</button>
     <button class="s d" onclick="delListing('${l.id}')">Del</button></div></div>`).join('') || '<small style="color:var(--mut)">Nothing listed yet.</small>'}</div>`;
 }
 async function saveShop(){
   const name = $('shn').value.trim(), phone = $('shp').value.replace(/\D/g, '');
   if (name.length < 2) return flash('Enter your shop name.', 'e');
-  const {error} = await sb.from('shops').upsert({owner:S.user.id, name, phone: phone || null}, {onConflict:'owner'});
+  const {error} = await sb.from('shops').upsert({
+    owner:S.user.id, name, phone: phone || null, category: $('shc').value, public_market: $('shm').checked
+  }, {onConflict:'owner'});
   if (error) return flash(error.message, 'e');
   await loadCatalog(); flash('Shop saved.');
 }
 async function saveListing(){
   if (!S.shop) return flash('Create your shop first.', 'e');
-  const row = {name: $('ln').value.trim(), price: parseFloat($('lp').value), description: $('ld').value.trim() || null};
+  const row = {name: $('ln').value.trim(), price: parseFloat($('lp').value), description: $('ld').value.trim() || null, category: $('lc').value};
   if (!row.name) return flash('Enter the item name.', 'e');
   if (!(row.price >= 0)) return flash('Enter a valid price.', 'e');
+  const file = $('li').files[0];
+  const old = S.editingL ? S.listings.find(l => l.id === S.editingL) : null;
+  if (file) {
+    flash('Uploading photo…');
+    try { row.image_url = await uploadImage(file); }
+    catch (err) { return flash(err.message || 'Photo upload failed.', 'e'); }
+  }
   const {error} = S.editingL ? await sb.from('listings').update(row).eq('id', S.editingL) : await sb.from('listings').insert({...row, in_stock:true});
   if (error) return flash(error.message, 'e');
+  if (file && old?.image_url) removeImage(old.image_url);
   S.editingL = null; await loadCatalog(); flash('Item saved.');
 }
 async function listFromStock(id){
   const p = S.products.find(x => x.id === id); if (!p) return;
-  const {error} = await sb.from('listings').insert({product_id:p.id, name:p.name, price:p.selling_price, in_stock:p.stock_qty > 0});
+  const category = $('lsc')?.value || 'Other';
+  const {error} = await sb.from('listings').insert({product_id:p.id, name:p.name, price:p.selling_price, in_stock:p.stock_qty > 0, category});
   if (error) return flash(error.message, 'e');
   await loadCatalog(); flash('Listed online.');
 }
@@ -413,8 +469,10 @@ async function toggleListing(id){
 }
 async function delListing(id){
   if (!confirm('Remove this item from your online shop?')) return;
+  const l = S.listings.find(x => x.id === id);
   const {error} = await sb.from('listings').delete().eq('id', id);
   if (error) return flash(error.message, 'e');
+  if (l?.image_url) removeImage(l.image_url);
   await loadCatalog();
 }
 function copyLink(){
