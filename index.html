@@ -354,6 +354,26 @@ async function delExpense(id){
   await load();
 }
 
+function insightsHtml(rs, sales, profit, p){
+  if (!rs.length) return '';
+  const by = {};
+  rs.forEach(r => { const k = r.product_name || '?'; const o = by[k] || (by[k] = {n:k, q:0, rev:0, pr:0});
+    o.q += Number(r.quantity); o.rev += Number(r.total_amount); o.pr += Number(r.profit); });
+  const items = Object.values(by);
+  const top = [...items].sort((a,b) => b.q - a.q).slice(0,5);
+  const best = [...items].sort((a,b) => b.pr - a.pr).slice(0,5);
+  const margin = sales > 0 ? (profit / sales * 100) : 0;
+  const days = {}; rs.forEach(r => { const d = new Date(r.created_at).toLocaleDateString(); days[d] = (days[d]||0) + Number(r.total_amount); });
+  const bd = Object.entries(days).sort((a,b) => b[1]-a[1])[0];
+  const list = (arr, f) => arr.map((o,i) => `<div class="row"><div><b>${i+1}. ${esc(o.n)}</b></div><div style="text-align:right">${f(o)}</div></div>`).join('');
+  return `<div class="card"><h3>Profit summary</h3>
+    <div class="row"><div>Number of sales</div><b>${rs.length}</b></div>
+    <div class="row"><div>Average sale</div><b>${money(sales / rs.length)}</b></div>
+    <div class="row"><div>Profit margin</div><b class="${margin>=0?'ok':'bad'}">${margin.toFixed(1)}%</b></div>
+    ${p !== 'today' && bd ? `<div class="row"><div>Best day</div><b>${esc(bd[0])} · ${money(bd[1])}</b></div>` : ''}</div>
+  <div class="card"><h3>Top selling items</h3>${list(top, o => `<b>${o.q} sold</b><small>${money(o.rev)}</small>`)}</div>
+  <div class="card"><h3>Most profitable items</h3>${list(best, o => `<b class="ok">${money(o.pr)}</b><small>${o.q} sold</small>`)}</div>`;
+}
 function reportsView(){
   const p = S.period;
   const rs = S.sales.filter(r => inPeriod(r,p)), re = S.expenses.filter(r => inPeriod(r,p));
@@ -368,6 +388,7 @@ function reportsView(){
     <div class="stat"><small>Gross profit</small><b class="ok">${money(profit)}</b></div>
     <div class="stat"><small>Expenses</small><b class="bad">${money(exp)}</b></div>
     <div class="stat"><small>Net profit</small><b class="${net>=0?'ok':'bad'}">${money(net)}</b></div></div></div>
+  ${insightsHtml(rs, sales, profit, p)}
   <div class="card"><h3>Sales (${rs.length})</h3>${rs.length > 100 ? '<small style="color:var(--mut)">Showing the latest 100. Totals above include all.</small>' : ''}
   ${rs.slice(0,100).map(r=>`<div class="row"><div><b>${esc(r.product_name)} × ${r.quantity}</b><small>${new Date(r.created_at).toLocaleString()} · ${esc(r.recorded_by)}</small></div>
     <div style="text-align:right"><b>${money(r.total_amount)}</b><small class="ok">+${money(r.profit)}</small>
