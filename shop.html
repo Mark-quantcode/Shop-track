@@ -42,6 +42,7 @@ input{width:100%;padding:12px;font-size:16px;border:1px solid var(--line);border
 .tag{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;margin-top:6px}
 .tag.ok{background:#dcfce7;color:#166534}.tag.no{background:#fee2e2;color:#991b1b}
 a.ord{display:inline-block;margin-top:8px;padding:8px 12px;border-radius:8px;background:#16a34a;color:#fff;text-decoration:none;font-size:14px;font-weight:600}
+.moreb{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:15px;margin:6px 0 12px}
 .empty{text-align:center;color:var(--mut);padding:30px 10px}
 footer{text-align:center;color:var(--mut);font-size:12px;padding:20px}
 footer a{color:var(--pri)}
@@ -49,7 +50,15 @@ footer a{color:var(--pri)}
 </head>
 <body>
 <div class="live-bg" aria-hidden="true"><i class="blob b1"></i><i class="blob b2"></i></div>
-<div id="root"><div class="empty">Loading shop…</div></div>
+<div id="hero"></div>
+<main>
+  <div id="ctl" hidden>
+    <input id="q" type="search" placeholder="Search items…" oninput="onSearch(this.value)" autocomplete="off">
+    <div id="chips"></div>
+  </div>
+  <div id="list"><div class="empty">Loading shop…</div></div>
+</main>
+<footer>Powered by ShopTrack · <a href="market.html">Browse the marketplace</a></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -63,59 +72,87 @@ const CATS = [['Groceries','🛒'],['Fruits & Vegetables','🥬'],['Drinks','�
 const catIcon = n => (CATS.find(c => c[0] === n) || CATS[CATS.length - 1])[1];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money = n => 'KSh ' + Number(n || 0).toLocaleString('en-KE', {maximumFractionDigits:2});
+const $ = id => document.getElementById(id);
 const owner = new URLSearchParams(location.search).get('s');
-let shop = null, items = [], q = '', cat = '', demo = false;
+const PAGE = 30;
+let shop = null, items = [], counts = [], more = false, busy = false, seq = 0, timer;
+let q = '', cat = '', demo = false, err = '';
 
-function show(){
-  const root = document.getElementById('root');
-  if (!shop) return;
+const DEMO = [
+  {id:1, name:'Rice 2kg', description:'Pishori, long grain', price:380, in_stock:true, category:'Groceries'},
+  {id:2, name:'Cooking oil 1L', description:'', price:310, in_stock:true, category:'Groceries'},
+  {id:3, name:'Soda 500ml', description:'Assorted', price:60, in_stock:true, category:'Drinks'},
+  {id:4, name:'Bread (white)', description:'Fresh daily', price:70, in_stock:false, category:'Groceries'}
+];
+
+function heroHtml(){
+  return `<div class="hero"><div class="in"><a href="market.html">← Marketplace</a><img src="icon-192.png" alt=""><h1>${esc(shop.name)}</h1>
+    <p>${demo ? 'SAMPLE SHOP: open your own shop link to see your real items' : (shop.category ? catIcon(shop.category) + ' ' + esc(shop.category) + ' · ' : '') + 'Order on WhatsApp'}</p></div></div>`;
+}
+function chipsHtml(){
+  if (counts.length < 2) return '';
+  return `<div class="chips"><button class="${cat ? '' : 'on'}" onclick="pickCat('')">All</button>${counts.map(c => `<button class="${cat === c.category ? 'on' : ''}" data-c="${esc(c.category)}" onclick="pickCat(this.dataset.c)">${catIcon(c.category)} ${esc(c.category)}</button>`).join('')}</div>`;
+}
+function itemHtml(i){
   const phone = (shop.phone || '').replace(/\D/g, '');
-  const cats = [...new Set(items.map(i => i.category || 'Other'))];
-  if (cat && !cats.includes(cat)) cat = '';
-  const list = items.filter(i =>
-    (!cat || (i.category || 'Other') === cat) &&
-    (i.name + ' ' + (i.description || '')).toLowerCase().includes(q.toLowerCase()));
-  root.innerHTML = `<div class="hero"><div class="in"><a href="market.html">← Marketplace</a><img src="icon-192.png" alt=""><h1>${esc(shop.name)}</h1>
-    <p>${demo ? 'SAMPLE SHOP: open your own shop link to see your real items' : (shop.category ? catIcon(shop.category) + ' ' + esc(shop.category) + ' · ' : '') + 'Order on WhatsApp'}</p></div></div>
-  <main>
-  <input id="q" type="search" placeholder="Search items…" value="${esc(q)}" oninput="q=this.value;show();refocus()">
-  ${cats.length > 1 ? `<div class="chips"><button class="${cat ? '' : 'on'}" onclick="cat='';show()">All</button>${cats.map(c => `<button class="${cat === c ? 'on' : ''}" onclick="cat=this.dataset.c;show()" data-c="${esc(c)}">${catIcon(c)} ${esc(c)}</button>`).join('')}</div>` : ''}
-  ${list.map(i => `<div class="item">
-    ${safeImg(i.image_url) ? `<img class="pic" src="${esc(safeImg(i.image_url))}" alt="" loading="lazy">` : `<div class="pic ph">${catIcon(i.category)}</div>`}
+  const img = safeImg(i.image_url);
+  return `<div class="item">
+    ${img ? `<img class="pic" src="${esc(img)}" alt="" loading="lazy">` : `<div class="pic ph">${catIcon(i.category)}</div>`}
     <div class="mid"><b>${esc(i.name)}</b>${i.description ? `<small>${esc(i.description)}</small>` : ''}
     <span class="tag ${i.in_stock ? 'ok' : 'no'}">${i.in_stock ? 'In stock' : 'Out of stock'}</span>
-    ${phone && i.in_stock ? `<br><a class="ord" target="_blank" rel="noopener" href="https://wa.me/${phone}?text=${encodeURIComponent(`Hi ${shop.name}, I'd like to order: ${i.name} (${money(i.price)})`)}">Order on WhatsApp</a>` : ''}</div>
-    <div class="price">${money(i.price)}</div></div>`).join('') || `<div class="empty">${items.length ? 'No items match.' : 'No items listed yet. Check back soon.'}</div>`}
-  </main><footer>Powered by ShopTrack · <a href="market.html">Browse the marketplace</a></footer>`;
-  document.title = shop.name;
+    ${phone && i.in_stock ? `<br><a class="ord" target="_blank" rel="noopener noreferrer" href="https://wa.me/${phone}?text=${encodeURIComponent(`Hi ${shop.name}, I'd like to order: ${i.name} (${money(i.price)})`)}">Order on WhatsApp</a>` : ''}</div>
+    <div class="price">${money(i.price)}</div></div>`;
 }
-function refocus(){
-  const el = document.getElementById('q');
-  if (el) { el.focus(); el.setSelectionRange(q.length, q.length); }
+function view(){
+  $('chips').innerHTML = chipsHtml();
+  if (err) { $('list').innerHTML = `<div class="empty">Could not load this shop. Please try again later.<br><small>${esc(err)}</small></div>`; return; }
+  $('list').innerHTML = items.map(itemHtml).join('')
+    + (busy ? '<div class="empty">Loading…</div>' : (!items.length ? `<div class="empty">${q.trim() || cat ? 'No items match.' : 'No items listed yet. Check back soon.'}</div>` : ''))
+    + (more && !busy ? `<button class="moreb" onclick="fetchItems(false)">Show more</button>` : '');
 }
-async function load(){
-  const root = document.getElementById('root');
-  if (!owner || owner === 'demo') {
-    demo = true;
-    shop = {name:'Sample Mini Mart', phone:'254700000000', category:'Groceries'};
-    items = [
-      {id:1, name:'Rice 2kg', description:'Pishori, long grain', price:380, in_stock:true, category:'Groceries'},
-      {id:2, name:'Cooking oil 1L', description:'', price:310, in_stock:true, category:'Groceries'},
-      {id:3, name:'Soda 500ml', description:'Assorted', price:60, in_stock:true, category:'Drinks'},
-      {id:4, name:'Bread (white)', description:'Fresh daily', price:70, in_stock:false, category:'Groceries'}
-    ];
-    show(); return;
+
+async function fetchItems(reset){
+  const my = ++seq;
+  if (reset) { items = []; more = false; }
+  busy = true; view();
+  let data;
+  if (demo) {
+    const t = q.trim().toLowerCase();
+    data = DEMO.filter(i => (!cat || i.category === cat) && (!t || i.name.toLowerCase().includes(t)));
+  } else {
+    let qy = sb.from('listings').select('id,name,description,price,in_stock,category,image_url').eq('owner', owner);
+    if (cat === 'Other') qy = qy.or('category.eq.Other,category.is.null'); else if (cat) qy = qy.eq('category', cat);
+    const term = q.replace(/[%_\\,()]/g, ' ').trim();
+    if (term) qy = qy.ilike('name', '%' + term + '%');
+    qy = qy.order('in_stock', {ascending:false}).order('name').order('id').range(items.length, items.length + PAGE - 1);
+    const r = await qy;
+    if (my !== seq) return;
+    if (r.error) { busy = false; err = r.error.message; view(); return; }
+    data = r.data;
   }
-  const [s, l] = await Promise.all([
-    sb.from('shops').select('name,phone,category').eq('owner', owner).maybeSingle(),
-    sb.from('listings').select('id,name,description,price,in_stock,category,image_url').eq('owner', owner).order('in_stock', {ascending:false}).order('name')
-  ]);
-  if (s.error || l.error) { root.innerHTML = '<div class="empty">Could not load this shop. Please try again later.</div>'; return; }
-  if (!s.data) { root.innerHTML = '<div class="empty">Shop not found.</div>'; return; }
-  shop = s.data; items = l.data; show();
+  busy = false; err = '';
+  items = items.concat(data); more = !demo && data.length === PAGE; view();
 }
-load();
-setInterval(() => { if (!document.hidden && !q && !demo) load(); }, 60000);
+function onSearch(v){ q = v; clearTimeout(timer); timer = setTimeout(() => fetchItems(true), 300); }
+function pickCat(c){ cat = c; fetchItems(true); }
+
+async function init(){
+  if (!owner || owner === 'demo') {
+    demo = true; shop = {name:'Sample Mini Mart', phone:'254700000000', category:'Groceries'};
+    const m = {}; DEMO.forEach(i => m[i.category] = (m[i.category] || 0) + 1);
+    counts = Object.entries(m).map(([category, n]) => ({category, n}));
+  } else {
+    const s = await sb.from('shops').select('name,phone,category').eq('owner', owner).maybeSingle();
+    if (s.error) { $('list').innerHTML = `<div class="empty">Could not load this shop. Please try again later.<br><small>${esc(s.error.message)}</small></div>`; return; }
+    if (!s.data) { $('list').innerHTML = '<div class="empty">Shop not found.</div>'; return; }
+    shop = s.data;
+    const c = await sb.rpc('shop_category_counts', {p_owner: owner});
+    counts = c.error ? [] : c.data;
+  }
+  $('hero').innerHTML = heroHtml(); $('ctl').hidden = false; document.title = shop.name;
+  await fetchItems(true);
+}
+init();
 </script>
 </body>
 </html>
