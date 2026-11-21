@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0f766e">
 <link rel="icon" href="icon-192.png">
-<title>ShopTrack Marketplace</title>
+<title>Brinvoq Marketplace</title>
 <style>
 :root{--bg:#f4f6f8;--card:#fff;--ink:#16202a;--mut:#6b7785;--pri:#0f766e;--bad:#c2410c;--ok:#15803d;--line:#e3e8ee}
 @media(prefers-color-scheme:dark){:root{--bg:#10151a;--card:#1a2129;--ink:#eef2f6;--mut:#93a1b0;--pri:#2dd4bf;--bad:#fb923c;--ok:#4ade80;--line:#2a343f}}
@@ -53,12 +53,12 @@ footer a{color:var(--pri)}
 </head>
 <body>
 <div class="live-bg" aria-hidden="true"><i class="blob b1"></i><i class="blob b2"></i></div>
-<div class="hero"><div class="in"><img src="icon-192.png" alt=""><h1>ShopTrack Marketplace</h1><p>Find what you need from local sellers</p></div></div>
+<div class="hero"><div class="in"><img src="icon-192.png" alt=""><h1>Brinvoq Marketplace</h1><p>Find what you need from local sellers</p></div></div>
 <main>
   <input id="q" type="search" placeholder="Search products or shops…" oninput="onSearch(this.value)" autocomplete="off">
   <div id="root"><div class="empty">Loading…</div></div>
 </main>
-<footer>Powered by ShopTrack · <a href="index.html">Sell here</a></footer>
+<footer>Powered by Brinvoq · <a href="index.html">Sell here</a></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -84,7 +84,7 @@ function itemCard(i){
     <div class="mid"><b>${esc(i.name)}</b>${i.description ? `<small>${esc(i.description)}</small>` : ''}
     <small>Sold by <a href="shop.html?s=${esc(i.owner)}">${esc(i.shop_name)}</a></small>
     <span class="tag ${i.in_stock ? 'ok' : 'no'}">${i.in_stock ? 'In stock' : 'Out of stock'}</span>
-    ${phone && i.in_stock ? `<br><a class="ord" target="_blank" rel="noopener noreferrer" href="https://wa.me/${phone}?text=${encodeURIComponent(`Hi ${i.shop_name}, I found "${i.name}" (${money(i.price)}) on ShopTrack and would like to order.`)}">Order on WhatsApp</a>` : ''}</div>
+    ${phone && i.in_stock ? `<br><a class="ord" target="_blank" rel="noopener noreferrer" href="https://wa.me/${phone}?text=${encodeURIComponent(`Hi ${i.shop_name}, I found "${i.name}" (${money(i.price)}) on Brinvoq and would like to order.`)}">Order on WhatsApp</a>` : ''}</div>
     <div class="price">${money(i.price)}</div></div>`;
 }
 function shopCard(s){
