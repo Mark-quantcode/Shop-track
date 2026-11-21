@@ -45,6 +45,7 @@ h2{font-size:18px;margin:16px 0 8px}
 .tag{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;margin-top:6px}
 .tag.ok{background:#dcfce7;color:#166534}.tag.no{background:#fee2e2;color:#991b1b}
 a.ord{display:inline-block;margin-top:8px;padding:8px 12px;border-radius:8px;background:#16a34a;color:#fff;text-decoration:none;font-size:14px;font-weight:600}
+.moreb{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:15px;margin:6px 0 12px}
 .empty{text-align:center;color:var(--mut);padding:30px 10px}
 footer{text-align:center;color:var(--mut);font-size:12px;padding:20px}
 footer a{color:var(--pri)}
@@ -53,7 +54,10 @@ footer a{color:var(--pri)}
 <body>
 <div class="live-bg" aria-hidden="true"><i class="blob b1"></i><i class="blob b2"></i></div>
 <div class="hero"><div class="in"><img src="icon-192.png" alt=""><h1>ShopTrack Marketplace</h1><p>Find what you need from local sellers</p></div></div>
-<main id="root"><div class="empty">Loading…</div></main>
+<main>
+  <input id="q" type="search" placeholder="Search products or shops…" oninput="onSearch(this.value)" autocomplete="off">
+  <div id="root"><div class="empty">Loading…</div></div>
+</main>
 <footer>Powered by ShopTrack · <a href="index.html">Sell here</a></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -68,67 +72,78 @@ const CATS = [['Groceries','🛒'],['Fruits & Vegetables','🥬'],['Drinks','�
 const catIcon = n => (CATS.find(c => c[0] === n) || CATS[CATS.length - 1])[1];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money = n => 'KSh ' + Number(n || 0).toLocaleString('en-KE', {maximumFractionDigits:2});
-let shops = [], items = [], q = '', cat = '', failed = false, failMsg = '';
-const shopById = {};
+const PAGE = 30, SPAGE = 20;
+let cat = '', q = '', items = [], more = false, busy = false, seq = 0, timer;
+let counts = [], shopsList = [], shopsMore = false, err = '';
 
 function itemCard(i){
-  const s = shopById[i.owner];
-  const phone = (s.phone || '').replace(/\D/g, '');
+  const phone = (i.shop_phone || '').replace(/\D/g, '');
+  const img = safeImg(i.image_url);
   return `<div class="item">
-    ${safeImg(i.image_url) ? `<img class="pic" src="${esc(safeImg(i.image_url))}" alt="" loading="lazy">` : `<div class="pic ph">${catIcon(i.category)}</div>`}
+    ${img ? `<img class="pic" src="${esc(img)}" alt="" loading="lazy">` : `<div class="pic ph">${catIcon(i.category)}</div>`}
     <div class="mid"><b>${esc(i.name)}</b>${i.description ? `<small>${esc(i.description)}</small>` : ''}
-    <small>Sold by <a href="shop.html?s=${esc(i.owner)}">${esc(s.name)}</a></small>
+    <small>Sold by <a href="shop.html?s=${esc(i.owner)}">${esc(i.shop_name)}</a></small>
     <span class="tag ${i.in_stock ? 'ok' : 'no'}">${i.in_stock ? 'In stock' : 'Out of stock'}</span>
-    ${phone && i.in_stock ? `<br><a class="ord" target="_blank" rel="noopener" href="https://wa.me/${phone}?text=${encodeURIComponent(`Hi ${s.name}, I found "${i.name}" (${money(i.price)}) on ShopTrack and would like to order.`)}">Order on WhatsApp</a>` : ''}</div>
+    ${phone && i.in_stock ? `<br><a class="ord" target="_blank" rel="noopener noreferrer" href="https://wa.me/${phone}?text=${encodeURIComponent(`Hi ${i.shop_name}, I found "${i.name}" (${money(i.price)}) on ShopTrack and would like to order.`)}">Order on WhatsApp</a>` : ''}</div>
     <div class="price">${money(i.price)}</div></div>`;
 }
 function shopCard(s){
   return `<a class="shopcard" href="shop.html?s=${esc(s.owner)}"><div class="pic ph">${catIcon(s.category)}</div>
-    <div class="mid"><b>${esc(s.name)}</b><small>${esc(s.category || 'Other')} · ${items.filter(i => i.owner === s.owner && i.in_stock).length} items in stock</small></div></a>`;
+    <div class="mid"><b>${esc(s.name)}</b><small>${esc(s.category || 'Other')}</small></div></a>`;
 }
 
-function show(){
+function view(){
   const root = document.getElementById('root');
-  if (failed) { root.innerHTML = `<div class="empty">Could not load the marketplace. Please try again later.<br><small>${esc(failMsg)}</small></div>`; return; }
-  const search = `<input id="q" type="search" placeholder="Search products or shops…" value="${esc(q)}" oninput="q=this.value;show();refocus()">`;
-  const term = q.trim().toLowerCase();
-  if (!cat && !term) {
-    const counts = {};
-    items.forEach(i => { if (i.in_stock) { const c = i.category || 'Other'; counts[c] = (counts[c] || 0) + 1; } });
-    const open = CATS.filter(([n]) => counts[n]);
-    root.innerHTML = search + `<h2>Shop by category</h2>` +
-      (open.length ? `<div class="cats">${open.map(([n,e]) => `<button class="cat" data-c="${esc(n)}" onclick="cat=this.dataset.c;show();scrollTo(0,0)"><span>${e}</span>${esc(n)}<small>${counts[n]} item${counts[n] === 1 ? '' : 's'}</small></button>`).join('')}</div>`
-                 : '<div class="empty">No items listed yet. Check back soon.</div>') +
-      (shops.length ? `<h2>Shops</h2>${shops.map(shopCard).join('')}` : '');
+  if (err) { root.innerHTML = `<div class="empty">Could not load the marketplace. Please try again later.<br><small>${esc(err)}</small></div>`; return; }
+  if (cat || q.trim()) {
+    root.innerHTML = `<button class="back" onclick="goHome()">← All categories</button>` +
+      (cat ? `<h2>${catIcon(cat)} ${esc(cat)}</h2>` : '<h2>Results</h2>') +
+      items.map(itemCard).join('') +
+      (busy ? '<div class="empty">Loading…</div>' : (!items.length ? '<div class="empty">No items match.</div>' : '')) +
+      (more && !busy ? `<button class="moreb" onclick="fetchItems(false)">Show more</button>` : '');
     return;
   }
-  let list = items.filter(i => (!cat || (i.category || 'Other') === cat) &&
-    (!term || (i.name + ' ' + (i.description || '') + ' ' + shopById[i.owner].name).toLowerCase().includes(term)));
-  list.sort((a, b) => Number(b.in_stock) - Number(a.in_stock));
-  const sh = shops.filter(s => (!cat || s.category === cat || items.some(i => i.owner === s.owner && (i.category || 'Other') === cat)) &&
-    (!term || s.name.toLowerCase().includes(term)));
-  root.innerHTML = search + `<button class="back" onclick="cat='';q='';show();scrollTo(0,0)">← All categories</button>` +
-    (cat ? `<h2>${catIcon(cat)} ${esc(cat)}</h2>` : '<h2>Results</h2>') +
-    (list.map(itemCard).join('') || '<div class="empty">No items match.</div>') +
-    (sh.length ? `<h2>Shops</h2>${sh.map(shopCard).join('')}` : '');
+  root.innerHTML = `<h2>Shop by category</h2>` +
+    (counts.length ? `<div class="cats">${counts.map(c => `<button class="cat" data-c="${esc(c.category)}" onclick="pickCat(this.dataset.c)"><span>${catIcon(c.category)}</span>${esc(c.category)}<small>${c.n} item${c.n === 1 ? '' : 's'}</small></button>`).join('')}</div>`
+                   : '<div class="empty">No items listed yet. Check back soon.</div>') +
+    (shopsList.length ? `<h2>Shops</h2>${shopsList.map(shopCard).join('')}${shopsMore ? `<button class="moreb" onclick="moreShops()">Show more shops</button>` : ''}` : '');
 }
-function refocus(){
-  const el = document.getElementById('q');
-  if (el) { el.focus(); el.setSelectionRange(q.length, q.length); }
+
+async function fetchItems(reset){
+  const my = ++seq;
+  if (reset) { items = []; more = false; }
+  busy = true; view();
+  const {data, error} = await sb.rpc('market_items', {p_q: q.trim() || null, p_cat: cat || null, p_lim: PAGE, p_off: items.length});
+  if (my !== seq) return;
+  busy = false;
+  if (error) { err = error.message; view(); return; }
+  err = ''; items = items.concat(data); more = data.length === PAGE; view();
 }
-async function load(){
-  const [s, l] = await Promise.all([
-    sb.from('shops').select('owner,name,phone,category').eq('public_market', true).order('name').limit(500),
-    sb.from('listings').select('id,owner,name,description,price,in_stock,category,image_url').order('created_at', {ascending:false}).limit(1500)
-  ]);
-  if (s.error || l.error) { failed = true; failMsg = (s.error || l.error).message; show(); return; }
-  failed = false; shops = s.data;
-  shops.forEach(x => shopById[x.owner] = x);
-  items = l.data.filter(i => shopById[i.owner]);
-  show();
+function onSearch(v){
+  q = v; clearTimeout(timer);
+  timer = setTimeout(() => {
+    if (q.trim() || cat) fetchItems(true);
+    else { seq++; busy = false; items = []; view(); }
+  }, 300);
 }
-load();
-setInterval(() => { if (!document.hidden && !q) load(); }, 90000);
+function pickCat(c){ cat = c; fetchItems(true); scrollTo(0, 0); }
+function goHome(){ cat = ''; q = ''; document.getElementById('q').value = ''; seq++; busy = false; items = []; view(); scrollTo(0, 0); }
+
+async function loadShops(reset){
+  const from = reset ? 0 : shopsList.length;
+  const {data, error} = await sb.from('shops').select('owner,name,category').eq('public_market', true)
+    .order('name').order('owner').range(from, from + SPAGE - 1);
+  if (error) { err = error.message; view(); return; }
+  shopsList = reset ? data : shopsList.concat(data); shopsMore = data.length === SPAGE;
+}
+async function moreShops(){ await loadShops(false); view(); }
+async function loadHome(){
+  const [c] = await Promise.all([sb.rpc('market_category_counts'), loadShops(true)]);
+  if (c.error) { err = c.error.message; view(); return; }
+  err = ''; counts = c.data; view();
+}
+loadHome();
+setInterval(() => { if (!document.hidden && !cat && !q.trim()) sb.rpc('market_category_counts').then(c => { if (!c.error && !cat && !q.trim()) { counts = c.data; view(); } }); }, 90000);
 </script>
 </body>
 </html>
