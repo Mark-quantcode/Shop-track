@@ -3,6 +3,8 @@
 <head>
 <link rel="manifest" href="manifest.json">
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://inugsmnlodvfsbkpxuyb.supabase.co; connect-src 'self' https://inugsmnlodvfsbkpxuyb.supabase.co wss://inugsmnlodvfsbkpxuyb.supabase.co; object-src 'none'; base-uri 'none'; form-action 'self'; manifest-src 'self'; worker-src 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0f766e">
 <link rel="icon" href="icon-192.png">
@@ -67,6 +69,10 @@ h3{margin:4px 0 8px}
 .logo{display:block;width:64px;height:64px;border-radius:16px;margin:4px 0 8px;object-fit:cover}
 .thumb{width:48px;height:48px;border-radius:8px;object-fit:cover;flex:none;display:block}
 .thumb.ph{display:flex;align-items:center;justify-content:center;background:var(--bg);font-size:22px}
+.prog{height:8px;background:var(--line);border-radius:99px;overflow:hidden;margin:8px 0 4px}.prog i{display:block;height:100%;background:var(--pri);border-radius:99px}
+.more{display:flex;align-items:center;gap:12px;width:100%;padding:14px 4px;background:none;border:0;border-bottom:1px solid var(--line);color:var(--ink);text-align:left;font:inherit}
+.more:last-child{border:0}.more small{display:block;color:var(--mut)}.more .ic{font-size:24px}.more .ch{margin-left:auto;color:var(--mut);font-size:22px}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--line);color:var(--mut);vertical-align:middle}
 /* live animated background */
 .live-bg{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
 .blob{position:absolute;width:70vmax;height:70vmax;border-radius:50%;opacity:.28;will-change:transform;animation:drift 22s ease-in-out infinite alternate}
@@ -93,8 +99,12 @@ const SUPABASE_KEY = 'sb_publishable_cj84eL5811FNFUBZ-xtAXw_5A7-w4KX';
 
 const CONFIGURED = /^https?:\/\//.test(SUPABASE_URL) && SUPABASE_KEY.length > 20 && !SUPABASE_KEY.startsWith('PASTE');
 const sb = CONFIGURED ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+// only ever show photos that live in our own storage folder
+const IMG_PREFIX = SUPABASE_URL + '/storage/v1/object/public/listing-images/';
+const safeImg = u => (typeof u === 'string' && u.startsWith(IMG_PREFIX)) ? u : '';
 const S = { user:null, view:'home', products:[], sales:[], expenses:[], period:'today', editing:null, authMode:'in',
-  shop:null, listings:[], catalogErr:null, editingL:null };
+  shop:null, listings:[], catalogErr:null, editingL:null,
+  goals:[], sav:[], savErr:null, savKind:'deposit' };
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money = n => 'KSh ' + Number(n || 0).toLocaleString('en-KE', {maximumFractionDigits:2});
@@ -137,6 +147,7 @@ async function load(){
   S.products = p.data; S.sales = s.data; S.expenses = e.data;
   render();
   loadCatalog();
+  loadSavings();
 }
 
 // ---------- Auth ----------
@@ -154,7 +165,7 @@ function authView(){
   <div class="tog"><button class="${up?'':'on'}" onclick="setMode('in')">Sign in</button><button class="${up?'on':''}" onclick="setMode('up')">Create account</button></div>
   ${up ? `<label>Username (shown in your greeting)</label><input id="un" maxlength="20" autocomplete="nickname" placeholder="e.g. Mark">` : ''}
   <label>Email</label><input id="em" type="email" autocomplete="email">
-  <label>Password (min 6 characters)</label><input id="pw" type="password" autocomplete="${up?'new-password':'current-password'}">
+  <label>Password (min 8 characters)</label><input id="pw" type="password" autocomplete="${up?'new-password':'current-password'}">
   <button class="p" onclick="${up?'signUp()':'signIn()'}">${up?'Create account':'Sign in'}</button>
   <p style="text-align:center;margin:16px 0 0"><a href="market.html" style="color:var(--pri);font-weight:600;text-decoration:none">🛍️ Buying? Browse the marketplace</a></p>
   </div></main>`;
@@ -166,6 +177,7 @@ async function signIn(){
 async function signUp(){
   const username = ($('un').value || '').trim();
   if (username.length < 2) return flash('Choose a username (at least 2 characters).', 'e');
+  if ($('pw').value.length < 8) return flash('Use a password of at least 8 characters.', 'e');
   const {data, error} = await sb.auth.signUp({
     email:$('em').value.trim(), password:$('pw').value,
     options:{ data:{ username } }
@@ -219,7 +231,7 @@ function homeView(){
   <div class="card"><h3>Recent sales</h3>
   ${recent.map(r=>`<div class="row"><div><b>${esc(r.product_name)} × ${r.quantity}</b><small>${new Date(r.created_at).toLocaleString()}</small></div><b>${money(r.total_amount)}</b></div>`).join('') || '<small style="color:var(--mut)">No sales yet. Tap Sell to record your first.</small>'}</div>`;
 }
-function go(v){ S.view = v; S.editing = null; render(); scrollTo(0,0); }
+function go(v){ S.view = v; S.editing = null; render(); scrollTo(0,0); if (v === 'sav') loadSavings(); }
 
 function sellView(){
   if (!S.products.length) return `<div class="card">Add products in the Stock tab first.</div>`;
@@ -392,6 +404,7 @@ function catalogView(){
   const e = S.editingL ? S.listings.find(l => l.id === S.editingL) : null;
   const listed = new Set(S.listings.map(l => l.product_id).filter(Boolean));
   const avail = S.products.filter(p => !listed.has(p.id));
+  const susp = sh?.suspended ? '<div class="card" style="border-color:var(--bad)"><b class="bad">Your shop is suspended</b><small style="display:block;color:var(--mut)">It is hidden from customers. Contact the ShopTrack admin.</small></div>' : '';
   const shopCard = `<div class="card"><h3>Your online shop</h3>
     <label>Shop name</label><input id="shn" maxlength="40" value="${esc(sh?.name)}" placeholder="e.g. Mark's Mini Mart">
     <label>Shop category (what you mainly sell)</label><select id="shc">${catOptions(sh?.category || 'Groceries')}</select>
@@ -399,7 +412,7 @@ function catalogView(){
     <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input id="shm" type="checkbox" style="width:auto" ${!sh || sh.public_market ? 'checked' : ''}> Show my shop in the marketplace</label>
     <button class="p" onclick="saveShop()">${sh ? 'Update shop' : 'Create my online shop'}</button></div>`;
   if (!sh) return shopCard + `<div class="card"><small style="color:var(--mut)">Create your shop to get a public link customers can open without an account. Only the items you list and the details above are public.</small></div>`;
-  return shopCard + `<div class="card"><h3>Share your shop</h3>
+  return susp + shopCard + `<div class="card"><h3>Share your shop</h3>
     <small style="color:var(--mut)">Customers open this link, no account needed.</small>
     <input readonly value="${esc(shopLink())}" onclick="this.select()" style="margin-top:8px">
     <div class="grid"><button class="p" onclick="copyLink()">Copy link</button><button class="p o" onclick="shareLink()">Share on WhatsApp</button></div>
@@ -409,7 +422,7 @@ function catalogView(){
     <label>Category</label><select id="lc">${catOptions(e?.category || sh.category || 'Groceries')}</select>
     <label>Current price (KSh)</label><input id="lp" type="number" inputmode="decimal" step="any" value="${e?.price ?? ''}">
     <label>Description (optional)</label><input id="ld" maxlength="120" value="${esc(e?.description)}">
-    <label>Photo (optional)</label>${e?.image_url ? `<img class="thumb" src="${esc(e.image_url)}" alt="" style="margin-bottom:6px">` : ''}
+    <label>Photo (optional)</label>${safeImg(e?.image_url) ? `<img class="thumb" src="${esc(safeImg(e.image_url))}" alt="" style="margin-bottom:6px">` : ''}
     <input id="li" type="file" accept="image/*">
     <button class="p" onclick="saveListing()">${e ? 'Update item' : 'Add item'}</button>
     ${e ? `<button class="p g" onclick="S.editingL=null;render()">Cancel</button>` : ''}</div>
@@ -420,7 +433,7 @@ function catalogView(){
       <button class="s" onclick="listFromStock('${p.id}')">List online</button></div>`).join('')}</div>` : ''}
   <div class="card"><h3>Online items (${S.listings.length})</h3>
   ${S.listings.map(l => `<div class="row"><div style="display:flex;gap:10px;align-items:center">
-    ${l.image_url ? `<img class="thumb" src="${esc(l.image_url)}" alt="" loading="lazy">` : `<div class="thumb ph">${catIcon(l.category)}</div>`}
+    ${safeImg(l.image_url) ? `<img class="thumb" src="${esc(safeImg(l.image_url))}" alt="" loading="lazy">` : `<div class="thumb ph">${catIcon(l.category)}</div>`}
     <div><b>${esc(l.name)}</b>
     <small>${money(l.price)} · <span class="${l.in_stock ? 'ok' : 'bad'}">${l.in_stock ? 'In stock' : 'Out of stock'}</span></small>
     <small>${esc(l.category || 'Other')}${l.product_id ? ' · auto from Stock' : ''}</small></div></div>
@@ -485,6 +498,142 @@ function shareLink(){
   window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
 }
 
+// ---------- More menu ----------
+function moreView(){
+  const t = (k, ic, title, sub) => `<button class="more" onclick="go('${k}')"><span class="ic">${ic}</span><div><b>${title}</b><small>${sub}</small></div><span class="ch">›</span></button>`;
+  return `<div class="card" style="padding:4px 14px">
+    ${t('sav','💰','Savings','Set goals and see what you have saved')}
+    ${t('exp','💸','Expenses','Record rent, transport and other costs')}
+    ${t('rep','📊','Reports','Sales and profit by day, week or month')}
+    ${t('me','👤','Profile','Username and sign out')}
+  </div>`;
+}
+
+// ---------- Savings ----------
+// Options only, not recommendations. No rates are shown because they change.
+const PROVIDERS = [
+  ['M-Shwari', 'Mobile savings', 'Safaricom and NCBA. Save and borrow from your phone. Handy for small, frequent amounts.'],
+  ['KCB M-PESA', 'Mobile savings', 'KCB and Safaricom. Mobile savings and loans from the M-PESA menu.'],
+  ['Bank savings account', 'Bank', 'For example Equity, KCB, Co-op, Family or I&M. Better for larger amounts. Check monthly fees and the minimum balance.'],
+  ['SACCO', 'Savings group', 'Member-owned. You contribute regularly and can often borrow against your savings. Check the SACCO is registered.'],
+  ['Money market fund', 'Investment', 'Run by fund managers, for example Sanlam, CIC or Britam. Earns interest, but returns are not guaranteed. Check the fund is CMA-regulated.'],
+  ['Chama', 'Group', 'Saving together with people you trust. Agree the rules in writing.'],
+  ['Cash / M-PESA wallet', 'Cash', 'Money you keep at hand. Easy to reach, but easy to spend or lose.'],
+  ['Other', '', '']
+];
+const provOptions = sel => PROVIDERS.map(p => `<option value="${esc(p[0])}" ${p[0] === sel ? 'selected' : ''}>${esc(p[0])}</option>`).join('');
+
+async function loadSavings(){
+  if (!S.user) return;
+  const [g, e] = await Promise.all([
+    sb.from('savings_goals').select('*').order('created_at'),
+    sb.from('savings_entries').select('*').order('created_at', {ascending:false}).limit(30)
+  ]);
+  if (g.error || e.error) { S.savErr = (g.error || e.error).message; S.goals = []; S.sav = []; }
+  else { S.savErr = null; S.goals = g.data; S.sav = e.data; }
+  if (S.view === 'sav') render();
+}
+
+function monthNet(){
+  const ms = periodStart('month');
+  const profit = S.sales.filter(r => new Date(r.created_at) >= ms).reduce((a, r) => a + Number(r.profit || 0), 0);
+  const exp = S.expenses.filter(r => new Date(r.created_at) >= ms).reduce((a, r) => a + Number(r.amount || 0), 0);
+  return profit - exp;
+}
+// re-render while keeping what the user already typed in the add/withdraw form
+function keepForm(fn){
+  const ids = ['svg', 'sva', 'svn'], keep = ids.map(id => $(id)?.value ?? '');
+  fn(); render();
+  ids.forEach((id, i) => { if ($(id) && keep[i] !== '') $(id).value = keep[i]; });
+}
+function setSavKind(k){ keepForm(() => { S.savKind = k; }); }
+function suggestSave(p){
+  keepForm(() => { S.savKind = 'deposit'; });
+  const el = $('sva'); if (el) el.value = Math.max(0, Math.round(monthNet() * p));
+}
+
+function savingsView(){
+  if (S.savErr) return `<div class="card"><h3>Savings</h3>
+    <p style="color:var(--mut)">Savings is not set up yet. Run the latest SQL file (security_savings_v3.sql) in Supabase, then reopen the app.</p>
+    <small class="bad">${esc(S.savErr)}</small></div>`;
+  const total = S.goals.reduce((a, g) => a + Number(g.saved || 0), 0);
+  const byProv = {};
+  S.goals.forEach(g => { const p = g.provider || 'Other'; byProv[p] = (byProv[p] || 0) + Number(g.saved || 0); });
+  const net = monthNet();
+  const goalName = id => S.goals.find(g => g.id === id)?.name || 'Deleted goal';
+  const dep = S.savKind !== 'withdraw';
+
+  const hero = `<div class="hero"><h2>💰 Savings</h2><p>Money you have set aside</p>
+    <div class="big">Total saved<b>${money(total)}</b>${S.goals.length} goal${S.goals.length === 1 ? '' : 's'}</div></div>`;
+
+  const goalCard = g => {
+    const t = Number(g.target) || 0, sv = Number(g.saved) || 0, pct = t > 0 ? Math.min(100, Math.round(sv / t * 100)) : 0;
+    return `<div class="card"><div class="row" style="border:0;padding:0"><div><b>${esc(g.name)}</b><small>${esc(g.provider || 'Other')}</small></div><b class="ok">${money(sv)}</b></div>
+      ${t > 0 ? `<div class="prog"><i style="width:${pct}%"></i></div><small style="color:var(--mut)">${pct}% of ${money(t)}${pct >= 100 ? ' · Goal reached 🎉' : ''}</small>` : '<small style="color:var(--mut)">No target set</small>'}
+      <div style="text-align:right;margin-top:6px"><button class="s d" onclick="delGoal('${g.id}')">Delete goal</button></div></div>`;
+  };
+
+  const moveCard = S.goals.length ? `<div class="card"><h3>Add or withdraw</h3>
+    <div class="tog"><button class="${dep ? 'on' : ''}" onclick="setSavKind('deposit')">Add money</button><button class="${dep ? '' : 'on'}" onclick="setSavKind('withdraw')">Withdraw</button></div>
+    <label>Goal</label><select id="svg">${S.goals.map(g => `<option value="${g.id}">${esc(g.name)} · ${esc(g.provider || 'Other')} · ${money(g.saved)}</option>`).join('')}</select>
+    <label>Amount (KSh)</label><input id="sva" type="number" inputmode="decimal" min="0" step="any">
+    ${dep ? (net > 0
+      ? `<small style="color:var(--mut);display:block;margin-top:6px">Your net profit this month is <b class="ok">${money(net)}</b>. Quick amounts:
+         <button class="s" onclick="suggestSave(0.1)">10%</button><button class="s" onclick="suggestSave(0.2)">20%</button><button class="s" onclick="suggestSave(0.3)">30%</button></small>`
+      : `<small style="color:var(--mut);display:block;margin-top:6px">No net profit recorded this month yet.</small>`) : ''}
+    <label>Note (optional)</label><input id="svn" maxlength="80" placeholder="e.g. Sent to M-Shwari">
+    <button class="p" onclick="addSaving()">${dep ? 'Save money' : 'Record withdrawal'}</button></div>` : '';
+
+  const provCard = S.goals.length ? `<div class="card"><h3>Balance by provider</h3>
+    ${Object.entries(byProv).sort((a, b) => b[1] - a[1]).map(([p, v]) => `<div class="row"><span>${esc(p)}</span><b>${money(v)}</b></div>`).join('')}
+    <small style="color:var(--mut)">These are the amounts you record here. ShopTrack cannot read your M-PESA or bank balance, so record each deposit and withdrawal to keep it accurate.</small></div>` : '';
+
+  const newGoal = `<div class="card"><h3>New savings goal</h3>
+    <label>Goal name</label><input id="gn" maxlength="40" placeholder="e.g. New fridge, Rent buffer, Emergency">
+    <label>Target amount (optional)</label><input id="gt" type="number" inputmode="decimal" min="0" step="any">
+    <label>Where will you keep it?</label><select id="gp">${provOptions('M-Shwari')}</select>
+    <button class="p" onclick="addGoal()">Create goal</button></div>`;
+
+  const hist = S.sav.slice(0, 10);
+  const histCard = hist.length ? `<div class="card"><h3>Recent activity</h3>
+    ${hist.map(x => `<div class="row"><div><b>${esc(goalName(x.goal_id))}</b><small>${new Date(x.created_at).toLocaleString()}${x.note ? ' · ' + esc(x.note) : ''}</small></div>
+      <b class="${x.kind === 'deposit' ? 'ok' : 'bad'}">${x.kind === 'deposit' ? '+' : '−'}${money(x.amount)}</b></div>`).join('')}</div>` : '';
+
+  const options = `<div class="card"><h3>Where you can save</h3>
+    ${PROVIDERS.filter(p => p[2]).map(p => `<div class="row"><div><b>${esc(p[0])}</b> <span class="badge">${esc(p[1])}</span><small>${esc(p[2])}</small></div></div>`).join('')}
+    <small style="color:var(--mut);display:block;margin-top:8px">These are options, not recommendations. Rates, fees and rules change, so check them with the provider before you save.</small></div>`;
+
+  return hero + (S.goals.length ? S.goals.map(goalCard).join('') : '<div class="card"><small style="color:var(--mut)">No goals yet. Create your first one below.</small></div>')
+    + moveCard + provCard + newGoal + histCard + options;
+}
+
+async function addGoal(){
+  const name = $('gn').value.trim(), tv = $('gt').value, provider = $('gp').value;
+  const target = tv === '' ? null : parseFloat(tv);
+  if (!name) return flash('Name your goal, for example New fridge.', 'e');
+  if (target !== null && !(target >= 0)) return flash('Enter a valid target.', 'e');
+  const {error} = await sb.from('savings_goals').insert({name, target, provider});
+  if (error) return flash(error.message, 'e');
+  await loadSavings(); flash('Goal created.');
+}
+async function addSaving(){
+  const goal_id = $('svg')?.value, amount = parseFloat($('sva').value), note = $('svn').value.trim() || null;
+  const kind = S.savKind === 'withdraw' ? 'withdraw' : 'deposit';
+  if (!goal_id) return flash('Create a goal first.', 'e');
+  if (!(amount > 0)) return flash('Enter an amount above 0.', 'e');
+  const {error} = await sb.from('savings_entries').insert({goal_id, kind, amount, note});
+  if (error) return flash(error.message, 'e');
+  await loadSavings(); flash(kind === 'deposit' ? 'Saved. Well done!' : 'Withdrawal recorded.');
+}
+async function delGoal(id){
+  const g = S.goals.find(x => x.id === id);
+  const warn = g && Number(g.saved) > 0 ? ` It holds ${money(g.saved)}. Withdraw it first if you want to keep a record.` : '';
+  if (!confirm('Delete this goal and its history?' + warn)) return;
+  const {error} = await sb.from('savings_goals').delete().eq('id', id);
+  if (error) return flash(error.message, 'e');
+  await loadSavings();
+}
+
 function profileView(){
   return `<div class="card"><h3>Your profile</h3>
   <label>Email</label><input value="${esc(S.user.email)}" disabled>
@@ -504,12 +653,13 @@ async function saveProfile(){
 function render(){
   const app = $('app');
   if (!S.user) { app.innerHTML = authView(); return; }
-  const views = {home:homeView, sell:sellView, stock:stockView, exp:expensesView, rep:reportsView, cat:catalogView, me:profileView};
-  const nav = [['home','🏠','Home'],['sell','🛒','Sell'],['stock','📦','Stock'],['cat','🌐','Online'],['exp','💸','Expenses'],['rep','📊','Reports']];
+  const views = {home:homeView, sell:sellView, stock:stockView, exp:expensesView, rep:reportsView, cat:catalogView, sav:savingsView, more:moreView, me:profileView};
+  const nav = [['home','🏠','Home'],['sell','🛒','Sell'],['stock','📦','Stock'],['cat','🌐','Online'],['more','☰','More']];
+  const moreSet = ['more','exp','rep','sav','me'];
   app.innerHTML = `<header><div class="brand"><img src="icon-192.png" alt="">ShopTrack</div>
   <button class="avatar" onclick="go('me')" aria-label="Profile">${esc(displayName().charAt(0).toUpperCase())}</button></header>
   <main>${views[S.view]()}</main>
-  <nav>${nav.map(([k,i,l])=>`<button class="${S.view===k?'on':''}" onclick="go('${k}')">${i}<br>${l}</button>`).join('')}</nav>`;
+  <nav>${nav.map(([k,i,l])=>`<button class="${(S.view===k || (k==='more' && moreSet.includes(S.view)))?'on':''}" onclick="go('${k}')">${i}<br>${l}</button>`).join('')}</nav>`;
   if (S.view === 'sell' && $('sp') && !$('su').value) fillPrice();
 }
 
@@ -523,7 +673,7 @@ if (!CONFIGURED) {
     setTimeout(() => {
       S.user = session?.user ?? null;
       if (S.user) { if (S.user.id !== lastUid) { lastUid = S.user.id; S.view = 'home'; load(); } }
-      else { lastUid = null; S.products = []; S.sales = []; S.expenses = []; render(); }
+      else { lastUid = null; S.products = []; S.sales = []; S.expenses = []; S.goals = []; S.sav = []; render(); }
     }, 0);
   });
 }
