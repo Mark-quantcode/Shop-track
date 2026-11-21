@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://inugsmnlodvfsbkpxuyb.supabase.co; connect-src 'self' https://inugsmnlodvfsbkpxuyb.supabase.co; object-src 'none'; base-uri 'none'; form-action 'self'; manifest-src 'self'; worker-src 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0f766e">
 <link rel="icon" href="icon-192.png">
@@ -58,19 +60,22 @@ footer a{color:var(--pri)}
 <script>
 const SUPABASE_URL = 'https://inugsmnlodvfsbkpxuyb.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_cj84eL5811FNFUBZ-xtAXw_5A7-w4KX';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false}});
+// only ever show photos that live in our own storage folder
+const IMG_PREFIX = SUPABASE_URL + '/storage/v1/object/public/listing-images/';
+const safeImg = u => (typeof u === 'string' && u.startsWith(IMG_PREFIX)) ? u : '';
 const CATS = [['Groceries','🛒'],['Fruits & Vegetables','🥬'],['Drinks','🥤'],['Household','🧴'],['Electronics','🔌'],['Phones & Accessories','📱'],['Clothing & Shoes','👕'],['Beauty & Health','💄'],['Hardware & Tools','🔧'],['Stationery & School','✏️'],['Other','📦']];
 const catIcon = n => (CATS.find(c => c[0] === n) || CATS[CATS.length - 1])[1];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money = n => 'KSh ' + Number(n || 0).toLocaleString('en-KE', {maximumFractionDigits:2});
-let shops = [], items = [], q = '', cat = '', failed = false;
+let shops = [], items = [], q = '', cat = '', failed = false, failMsg = '';
 const shopById = {};
 
 function itemCard(i){
   const s = shopById[i.owner];
   const phone = (s.phone || '').replace(/\D/g, '');
   return `<div class="item">
-    ${i.image_url ? `<img class="pic" src="${esc(i.image_url)}" alt="" loading="lazy">` : `<div class="pic ph">${catIcon(i.category)}</div>`}
+    ${safeImg(i.image_url) ? `<img class="pic" src="${esc(safeImg(i.image_url))}" alt="" loading="lazy">` : `<div class="pic ph">${catIcon(i.category)}</div>`}
     <div class="mid"><b>${esc(i.name)}</b>${i.description ? `<small>${esc(i.description)}</small>` : ''}
     <small>Sold by <a href="shop.html?s=${esc(i.owner)}">${esc(s.name)}</a></small>
     <span class="tag ${i.in_stock ? 'ok' : 'no'}">${i.in_stock ? 'In stock' : 'Out of stock'}</span>
@@ -84,7 +89,7 @@ function shopCard(s){
 
 function show(){
   const root = document.getElementById('root');
-  if (failed) { root.innerHTML = '<div class="empty">Could not load the marketplace. Please try again later.</div>'; return; }
+  if (failed) { root.innerHTML = `<div class="empty">Could not load the marketplace. Please try again later.<br><small>${esc(failMsg)}</small></div>`; return; }
   const search = `<input id="q" type="search" placeholder="Search products or shops…" value="${esc(q)}" oninput="q=this.value;show();refocus()">`;
   const term = q.trim().toLowerCase();
   if (!cat && !term) {
@@ -116,7 +121,7 @@ async function load(){
     sb.from('shops').select('owner,name,phone,category').eq('public_market', true).order('name').limit(500),
     sb.from('listings').select('id,owner,name,description,price,in_stock,category,image_url').order('created_at', {ascending:false}).limit(1500)
   ]);
-  if (s.error || l.error) { failed = true; show(); return; }
+  if (s.error || l.error) { failed = true; failMsg = (s.error || l.error).message; show(); return; }
   failed = false; shops = s.data;
   shops.forEach(x => shopById[x.owner] = x);
   items = l.data.filter(i => shopById[i.owner]);
