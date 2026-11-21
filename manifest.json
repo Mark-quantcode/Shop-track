@@ -1,6 +1,6 @@
 {
-  "name": "Shop-track",
-  "short_name": "Shop-track",
+  "name": "Brinvoq",
+  "short_name": "Brinvoq",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
