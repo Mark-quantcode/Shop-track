@@ -105,6 +105,7 @@ const safeImg = u => (typeof u === 'string' && u.startsWith(IMG_PREFIX)) ? u : '
 const S = { user:null, view:'home', products:[], sales:[], expenses:[], period:'today', editing:null, authMode:'in',
   shop:null, listings:[], catalogErr:null, editingL:null,
   goals:[], sav:[], savErr:null, savKind:'deposit',
+  custs:[], cErr:null, openC:null, cEntries:[], cq:'',
   stockQ:'', stockShow:50, sellQ:'', lq:'', lcount:0, lmore:false, listedIds:new Set(), fq:'', fshow:20 };
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -244,7 +245,7 @@ function homeView(){
   <div class="card"><h3>Recent sales</h3>
   ${recent.map(r=>`<div class="row"><div><b>${esc(r.product_name)} × ${r.quantity}</b><small>${new Date(r.created_at).toLocaleString()}</small></div><b>${money(r.total_amount)}</b></div>`).join('') || '<small style="color:var(--mut)">No sales yet. Tap Sell to record your first.</small>'}</div>`;
 }
-function go(v){ S.view = v; S.editing = null; render(); scrollTo(0,0); if (v === 'sav') loadSavings(); }
+function go(v){ S.view = v; S.editing = null; render(); scrollTo(0,0); if (v === 'sav') loadSavings(); if (v === 'cus') { S.openC = null; loadCustomers(); } }
 
 function sellOptions(){
   const q = S.products.length > 8 ? S.sellQ.trim().toLowerCase() : '';
@@ -605,6 +606,7 @@ function moreView(){
   const t = (k, ic, title, sub) => `<button class="more" onclick="go('${k}')"><span class="ic">${ic}</span><div><b>${title}</b><small>${sub}</small></div><span class="ch">›</span></button>`;
   return `<div class="card" style="padding:4px 14px">
     ${t('sav','💰','Savings','Set goals and see what you have saved')}
+    ${t('cus','🤝','Customers who owe','Track credit, payments and send reminders')}
     ${t('exp','💸','Expenses','Record rent, transport and other costs')}
     ${t('rep','📊','Reports','Sales and profit by day, week or month')}
     ${t('me','👤','Profile','Username and sign out')}
@@ -751,13 +753,106 @@ async function saveProfile(){
   S.user = data.user; flash('Username saved.'); go('home');
 }
 
+// ---------- Customers who owe ----------
+// Balances are what you record here (credit given, payments received). The app cannot see M-PESA or bank accounts.
+async function loadCustomers(){
+  if (!S.user) return;
+  const c = await sb.from('customers').select('*').order('balance', {ascending:false}).order('name').limit(2000);
+  if (c.error) { S.cErr = c.error.message; S.custs = []; } else { S.cErr = null; S.custs = c.data; }
+  if (S.openC) {
+    const e = await sb.from('customer_entries').select('*').eq('customer_id', S.openC).order('created_at', {ascending:false}).limit(30);
+    S.cEntries = e.error ? [] : e.data;
+  }
+  if (S.view === 'cus') render();
+}
+async function openCustomer(id){ S.openC = id; S.cEntries = []; render(); scrollTo(0,0); await loadCustomers(); }
+function closeCustomer(){ S.openC = null; render(); }
+function cSearch(v){ S.cq = v; const el = $('clist'); if (el) el.innerHTML = custRows(); }
+const waPhone = p => { let d = String(p || '').replace(/\D/g, '');
+  if (d.length === 10 && d[0] === '0') d = '254' + d.slice(1);
+  else if (d.length === 9 && /^[17]/.test(d)) d = '254' + d;
+  return d; };
+function custRows(){
+  const q = S.cq.trim().toLowerCase();
+  const list = S.custs.filter(c => !q || c.name.toLowerCase().includes(q) || (c.phone || '').includes(q));
+  return list.map(c => `<div class="row" style="cursor:pointer" onclick="openCustomer('${c.id}')"><div><b>${esc(c.name)}</b><small>${esc(c.phone || 'No phone')}</small></div>
+    <div style="text-align:right"><b class="${Number(c.balance) > 0 ? 'bad' : 'ok'}">${Number(c.balance) > 0 ? money(c.balance) : 'Cleared'}</b></div></div>`).join('')
+    || '<small style="color:var(--mut)">No customers match.</small>';
+}
+function customersView(){
+  if (S.cErr) return `<div class="card"><h3>Customers who owe</h3>
+    <p style="color:var(--mut)">This is not set up yet. Run the SQL file customers_v5.sql in Supabase, then reopen the app.</p>
+    <small class="bad">${esc(S.cErr)}</small></div>`;
+  const c = S.openC && S.custs.find(x => x.id === S.openC);
+  if (c) {
+    const bal = Number(c.balance), ph = waPhone(c.phone);
+    const shop = S.shop?.name || displayName();
+    const msg = `Hi ${c.name}, a friendly reminder that you have an outstanding balance of ${money(bal)} with ${shop}. Please pay when you can. Thank you.`;
+    return `<button class="back" style="background:none;border:0;color:var(--pri);font-weight:600;padding:4px 0 10px" onclick="closeCustomer()">← All customers</button>
+    <div class="card"><small style="color:var(--mut)">${esc(c.name)} owes</small><div style="font-size:30px;font-weight:700" class="${bal > 0 ? 'bad' : 'ok'}">${money(bal)}</div>
+      ${bal > 0 && ph ? `<div style="display:flex;gap:8px;margin-top:10px"><a class="p" style="flex:1;text-align:center;text-decoration:none;padding:12px;border-radius:10px;background:#16a34a;color:#fff;font-weight:600" target="_blank" rel="noopener noreferrer" href="https://wa.me/${ph}?text=${encodeURIComponent(msg)}">WhatsApp reminder</a>
+      <a style="flex:1;text-align:center;text-decoration:none;padding:12px;border-radius:10px;border:1px solid var(--line);color:var(--ink);font-weight:600" href="tel:+${ph}">Call</a></div>` : (bal > 0 ? '<small style="color:var(--mut)">Add a phone number below to send reminders.</small>' : '')}</div>
+    <div class="card"><h3>Record</h3>
+      <label>Amount</label><input id="cva" type="number" inputmode="decimal" min="0" placeholder="0">
+      <label>Note (optional)</label><input id="cvn" maxlength="80" placeholder="e.g. 2 bags of sugar, or M-PESA">
+      <div style="display:flex;gap:8px"><button class="p" style="flex:1" onclick="addCEntry('payment')">They paid</button><button class="p o" style="flex:1" onclick="addCEntry('credit')">Gave on credit</button></div></div>
+    <div class="card"><h3>Details</h3>
+      <label>Name</label><input id="cen" maxlength="60" value="${esc(c.name)}">
+      <label>Phone</label><input id="cep" type="tel" maxlength="20" value="${esc(c.phone || '')}" placeholder="0712 345 678">
+      <button class="p o" onclick="saveCustomer('${c.id}')">Save details</button>
+      <button class="s d" style="margin-top:8px" onclick="delCustomer('${c.id}')">Delete customer</button></div>
+    <div class="card"><h3>History</h3>${S.cEntries.map(e => `<div class="row"><div><b>${e.kind === 'payment' ? 'Paid' : 'Credit'}</b><small>${new Date(e.created_at).toLocaleString()}${e.note ? ' · ' + esc(e.note) : ''}</small></div>
+      <b class="${e.kind === 'payment' ? 'ok' : 'bad'}">${e.kind === 'payment' ? '−' : '+'}${money(e.amount)}</b></div>`).join('') || '<small style="color:var(--mut)">Nothing recorded yet.</small>'}</div>`;
+  }
+  const total = S.custs.reduce((a, x) => a + Number(x.balance), 0), owing = S.custs.filter(x => Number(x.balance) > 0).length;
+  return `<div class="card"><small style="color:var(--mut)">Total owed to you</small><div style="font-size:30px;font-weight:700" class="${total > 0 ? 'bad' : 'ok'}">${money(total)}</div>
+      <small style="color:var(--mut)">${owing} customer${owing === 1 ? '' : 's'} owing · amounts are what you record here</small></div>
+    <div class="card"><h3>New customer</h3>
+      <label>Name</label><input id="cnn" maxlength="60" placeholder="e.g. Dave Matt">
+      <label>Phone (for reminders)</label><input id="cnp" type="tel" maxlength="20" placeholder="0712 345 678">
+      <button class="p" onclick="addCustomer()">Add customer</button></div>
+    <div class="card"><h3>Customers (${S.custs.length})</h3>
+      <input type="search" placeholder="Search name or phone" value="${esc(S.cq)}" oninput="cSearch(this.value)" autocomplete="off">
+      <div id="clist">${custRows()}</div></div>`;
+}
+async function addCustomer(){
+  const name = $('cnn').value.trim(), phone = $('cnp').value.trim() || null;
+  if (!name) return flash('Enter the customer name.', 'e');
+  if (phone && !/^[0-9+() -]{7,20}$/.test(phone)) return flash('Enter a valid phone number.', 'e');
+  const {error} = await sb.from('customers').insert({name, phone});
+  if (error) return flash(error.message, 'e');
+  await loadCustomers(); flash('Customer added.');
+}
+async function saveCustomer(id){
+  const name = $('cen').value.trim(), phone = $('cep').value.trim() || null;
+  if (!name) return flash('Enter the customer name.', 'e');
+  if (phone && !/^[0-9+() -]{7,20}$/.test(phone)) return flash('Enter a valid phone number.', 'e');
+  const {error} = await sb.from('customers').update({name, phone}).eq('id', id);
+  if (error) return flash(error.message, 'e');
+  await loadCustomers(); flash('Saved.');
+}
+async function addCEntry(kind){
+  const amount = parseFloat($('cva').value), note = $('cvn').value.trim() || null;
+  if (!(amount > 0)) return flash('Enter an amount above 0.', 'e');
+  const {error} = await sb.from('customer_entries').insert({customer_id: S.openC, kind, amount, note});
+  if (error) return flash(error.message, 'e');
+  await loadCustomers(); flash(kind === 'payment' ? 'Payment recorded.' : 'Credit recorded.');
+}
+async function delCustomer(id){
+  const c = S.custs.find(x => x.id === id);
+  if (!confirm('Delete this customer and their history?' + (c && Number(c.balance) > 0 ? ` They still owe ${money(c.balance)}.` : ''))) return;
+  const {error} = await sb.from('customers').delete().eq('id', id);
+  if (error) return flash(error.message, 'e');
+  S.openC = null; await loadCustomers();
+}
+
 // ---------- Shell ----------
 function render(){
   const app = $('app');
   if (!S.user) { app.innerHTML = authView(); return; }
-  const views = {home:homeView, sell:sellView, stock:stockView, exp:expensesView, rep:reportsView, cat:catalogView, sav:savingsView, more:moreView, me:profileView};
+  const views = {home:homeView, sell:sellView, stock:stockView, exp:expensesView, rep:reportsView, cat:catalogView, sav:savingsView, cus:customersView, more:moreView, me:profileView};
   const nav = [['home','🏠','Home'],['sell','🛒','Sell'],['stock','📦','Stock'],['cat','🌐','Online'],['more','☰','More']];
-  const moreSet = ['more','exp','rep','sav','me'];
+  const moreSet = ['more','exp','rep','sav','cus','me'];
   app.innerHTML = `<header><div class="brand"><img src="icon-192.png" alt="">Brinvoq</div>
   <button class="avatar" onclick="go('me')" aria-label="Profile">${esc(displayName().charAt(0).toUpperCase())}</button></header>
   <main>${views[S.view]()}</main>
