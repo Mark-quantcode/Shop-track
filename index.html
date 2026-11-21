@@ -104,7 +104,8 @@ const IMG_PREFIX = SUPABASE_URL + '/storage/v1/object/public/listing-images/';
 const safeImg = u => (typeof u === 'string' && u.startsWith(IMG_PREFIX)) ? u : '';
 const S = { user:null, view:'home', products:[], sales:[], expenses:[], period:'today', editing:null, authMode:'in',
   shop:null, listings:[], catalogErr:null, editingL:null,
-  goals:[], sav:[], savErr:null, savKind:'deposit' };
+  goals:[], sav:[], savErr:null, savKind:'deposit',
+  stockQ:'', stockShow:50, sellQ:'', lq:'', lcount:0, lmore:false, listedIds:new Set(), fq:'', fshow:20 };
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money = n => 'KSh ' + Number(n || 0).toLocaleString('en-KE', {maximumFractionDigits:2});
@@ -136,12 +137,24 @@ function greeting(){
 }
 const todayLabel = () => new Date().toLocaleDateString('en-KE', {weekday:'long', day:'numeric', month:'long'});
 
+// Supabase returns at most 1000 rows per request, so read big tables page by page.
+async function fetchAll(make, max = 20000){
+  const out = [], step = 1000;
+  for (let from = 0; from < max; from += step) {
+    const {data, error} = await make().range(from, from + step - 1);
+    if (error) return {error};
+    out.push(...data);
+    if (data.length < step) break;
+  }
+  return {data: out};
+}
+
 async function load(){
   const since = new Date(); since.setDate(since.getDate() - 62);
   const [p, s, e] = await Promise.all([
-    sb.from('products').select('*').order('name'),
-    sb.from('sales').select('*').gte('created_at', since.toISOString()).order('created_at', {ascending:false}),
-    sb.from('expenses').select('*').gte('created_at', since.toISOString()).order('created_at', {ascending:false})
+    fetchAll(() => sb.from('products').select('*').order('name').order('id')),
+    fetchAll(() => sb.from('sales').select('*').gte('created_at', since.toISOString()).order('created_at', {ascending:false}).order('id')),
+    fetchAll(() => sb.from('expenses').select('*').gte('created_at', since.toISOString()).order('created_at', {ascending:false}).order('id'))
   ]);
   if (p.error || s.error || e.error) return flash((p.error||s.error||e.error).message, 'e');
   S.products = p.data; S.sales = s.data; S.expenses = e.data;
@@ -227,17 +240,26 @@ function homeView(){
     <div class="stat"><small>Stock value (at cost)</small><b>${money(stockValue)}</b></div></div></div>
   <div class="card"><h3>Last 7 days</h3><small style="color:var(--mut)">Daily sales</small>${weekBars()}</div>
   <div class="card"><h3>Low stock ${low.length ? '('+low.length+')' : ''}</h3>
-  ${low.length ? low.map(p=>`<div class="row"><span>${esc(p.name)}</span><b class="bad">${p.stock_qty} left</b></div>`).join('') : '<small style="color:var(--mut)">Everything is well stocked.</small>'}</div>
+  ${low.length ? low.slice(0,10).map(p=>`<div class="row"><span>${esc(p.name)}</span><b class="bad">${p.stock_qty} left</b></div>`).join('') + (low.length > 10 ? `<small style="color:var(--mut)">+ ${low.length - 10} more. See the Stock tab.</small>` : '') : '<small style="color:var(--mut)">Everything is well stocked.</small>'}</div>
   <div class="card"><h3>Recent sales</h3>
   ${recent.map(r=>`<div class="row"><div><b>${esc(r.product_name)} × ${r.quantity}</b><small>${new Date(r.created_at).toLocaleString()}</small></div><b>${money(r.total_amount)}</b></div>`).join('') || '<small style="color:var(--mut)">No sales yet. Tap Sell to record your first.</small>'}</div>`;
 }
 function go(v){ S.view = v; S.editing = null; render(); scrollTo(0,0); if (v === 'sav') loadSavings(); }
 
+function sellOptions(){
+  const q = S.products.length > 8 ? S.sellQ.trim().toLowerCase() : '';
+  const m = S.products.filter(p => !q || String(p.name).toLowerCase().includes(q));
+  if (!m.length) return '<option value="">No product matches</option>';
+  return m.slice(0, 50).map(p => `<option value="${p.id}">${esc(p.name)} (${p.stock_qty} in stock)</option>`).join('')
+    + (m.length > 50 ? `<option value="" disabled>… ${m.length - 50} more. Type to narrow the list.</option>` : '');
+}
+function sellFilter(v){ S.sellQ = v; $('sp').innerHTML = sellOptions(); fillPrice(); }
 function sellView(){
   if (!S.products.length) return `<div class="card">Add products in the Stock tab first.</div>`;
   return `<div class="card"><h3>Record a sale</h3>
-  <label>Product</label><select id="sp" onchange="fillPrice()">
-    ${S.products.map(p=>`<option value="${p.id}">${esc(p.name)} (${p.stock_qty} in stock)</option>`).join('')}</select>
+  <label>Product</label>
+  ${S.products.length > 8 ? `<input id="sq0" type="search" placeholder="Type to find a product" value="${esc(S.sellQ)}" oninput="sellFilter(this.value)" style="margin-bottom:8px">` : ''}
+  <select id="sp" onchange="fillPrice()">${sellOptions()}</select>
   <label>Quantity</label><input id="sq" type="number" inputmode="numeric" min="1" value="1">
   <label>Selling price each</label><input id="su" type="number" inputmode="decimal" min="0" step="any">
   <label>Recorded by</label><input id="sr" value="${esc(displayName())}">
@@ -248,6 +270,7 @@ function fillPrice(){
   if (p) $('su').value = p.selling_price;
 }
 async function addSale(){
+  if (!$('sp').value) return flash('Choose a product.', 'e');
   const qty = parseInt($('sq').value, 10), price = parseFloat($('su').value);
   if (!(qty > 0)) return flash('Enter a quantity of 1 or more.', 'e');
   if (!(price >= 0)) return flash('Enter a valid price.', 'e');
@@ -268,10 +291,26 @@ function stockView(){
   <div><label>Low-stock alert at</label><input id="pl" type="number" inputmode="numeric" value="${e?.low_stock_alert ?? 5}"></div></div>
   <button class="p" onclick="saveProduct()">${e ? 'Update' : 'Add product'}</button>
   ${e ? `<button class="p g" onclick="S.editing=null;render()">Cancel</button>` : ''}</div>
-  <div class="card"><h3>Products (${S.products.length})</h3>
-  ${S.products.map(p=>`<div class="row"><div><b>${esc(p.name)}</b><small>Buy ${money(p.buying_price)} · Sell ${money(p.selling_price)}</small></div>
+  <div class="card" id="plist">${productListHtml()}</div>`;
+}
+function productFiltered(){
+  const q = S.stockQ.trim().toLowerCase();
+  return q ? S.products.filter(p => String(p.name).toLowerCase().includes(q)) : S.products;
+}
+function productListHtml(){
+  const m = productFiltered(), shown = m.slice(0, S.stockShow);
+  return `<h3>Products (${S.products.length})</h3>
+  ${S.products.length > 8 ? `<input id="stq" type="search" placeholder="Search products…" value="${esc(S.stockQ)}" oninput="stockSearch(this.value)" style="margin-bottom:8px">` : ''}
+  ${shown.map(p=>`<div class="row"><div><b>${esc(p.name)}</b><small>Buy ${money(p.buying_price)} · Sell ${money(p.selling_price)}</small></div>
     <div style="text-align:right"><b class="${p.stock_qty<=p.low_stock_alert?'bad':''}">${p.stock_qty}</b>
-    <div><button class="s" onclick="S.editing='${p.id}';render();scrollTo(0,0)">Edit</button><button class="s d" onclick="delProduct('${p.id}')">Del</button></div></div></div>`).join('') || '<small style="color:var(--mut)">No products yet.</small>'}</div>`;
+    <div><button class="s" onclick="S.editing='${p.id}';render();scrollTo(0,0)">Edit</button><button class="s d" onclick="delProduct('${p.id}')">Del</button></div></div></div>`).join('')
+    || `<small style="color:var(--mut)">${S.products.length ? 'No product matches.' : 'No products yet.'}</small>`}
+  ${m.length > shown.length ? `<button class="p g" onclick="S.stockShow+=50;refreshProducts()">Show more (${m.length - shown.length} left)</button>` : ''}`;
+}
+function refreshProducts(){ const el = $('plist'); if (el) el.innerHTML = productListHtml(); }
+function stockSearch(v){
+  S.stockQ = v; S.stockShow = 50; refreshProducts();
+  const el = $('stq'); if (el) { el.focus(); el.setSelectionRange(v.length, v.length); }
 }
 async function saveProduct(){
   const row = {
@@ -329,8 +368,8 @@ function reportsView(){
     <div class="stat"><small>Gross profit</small><b class="ok">${money(profit)}</b></div>
     <div class="stat"><small>Expenses</small><b class="bad">${money(exp)}</b></div>
     <div class="stat"><small>Net profit</small><b class="${net>=0?'ok':'bad'}">${money(net)}</b></div></div></div>
-  <div class="card"><h3>Sales (${rs.length})</h3>
-  ${rs.map(r=>`<div class="row"><div><b>${esc(r.product_name)} × ${r.quantity}</b><small>${new Date(r.created_at).toLocaleString()} · ${esc(r.recorded_by)}</small></div>
+  <div class="card"><h3>Sales (${rs.length})</h3>${rs.length > 100 ? '<small style="color:var(--mut)">Showing the latest 100. Totals above include all.</small>' : ''}
+  ${rs.slice(0,100).map(r=>`<div class="row"><div><b>${esc(r.product_name)} × ${r.quantity}</b><small>${new Date(r.created_at).toLocaleString()} · ${esc(r.recorded_by)}</small></div>
     <div style="text-align:right"><b>${money(r.total_amount)}</b><small class="ok">+${money(r.profit)}</small>
     <button class="s d" onclick="delSale('${r.id}')">Del</button></div></div>`).join('') || '<small style="color:var(--mut)">No sales in this period.</small>'}</div>`;
 }
@@ -377,24 +416,58 @@ function removeImage(url){
   if (part) sb.storage.from(IMG_BUCKET).remove([decodeURIComponent(part.split('?')[0])]).then(() => {});
 }
 
+const LPAGE = 40;
 async function loadCatalog(){
   if (!S.user) return;
-  const [sh, ls] = await Promise.all([
+  const [sh, cnt, ids] = await Promise.all([
     sb.from('shops').select('*').eq('owner', S.user.id).maybeSingle(),
-    sb.from('listings').select('*').eq('owner', S.user.id).order('created_at', {ascending:false})
+    sb.from('listings').select('id', {count:'exact', head:true}).eq('owner', S.user.id),
+    fetchAll(() => sb.from('listings').select('product_id').eq('owner', S.user.id).not('product_id', 'is', null).order('id'))
   ]);
-  if (sh.error || ls.error) { S.catalogErr = (sh.error || ls.error).message; S.shop = null; S.listings = []; render(); return; }
-  S.catalogErr = null; S.shop = sh.data; S.listings = ls.data;
-  // items listed from Stock follow their stock level automatically
-  for (const l of S.listings) {
-    const p = l.product_id && S.products.find(x => x.id === l.product_id);
-    if (p && l.in_stock !== (p.stock_qty > 0)) {
-      l.in_stock = p.stock_qty > 0;
-      sb.from('listings').update({in_stock: l.in_stock}).eq('id', l.id).then(() => {});
-    }
-  }
-  render();
+  if (sh.error || cnt.error || ids.error) { S.catalogErr = (sh.error || cnt.error || ids.error).message; S.shop = null; S.listings = []; render(); return; }
+  S.catalogErr = null; S.shop = sh.data; S.lcount = cnt.count || 0;
+  S.listedIds = new Set(ids.data.map(r => r.product_id));
+  await loadListings(true);
 }
+async function loadListings(reset, partial){
+  const from = reset ? 0 : S.listings.length;
+  let qy = sb.from('listings').select('*').eq('owner', S.user.id);
+  const term = S.lq.replace(/[%_\\,()]/g, ' ').trim();
+  if (term) qy = qy.ilike('name', '%' + term + '%');
+  qy = qy.order('created_at', {ascending:false}).order('id').range(from, from + LPAGE - 1);
+  const {data, error} = await qy;
+  if (error) { S.catalogErr = error.message; render(); return; }
+  S.listings = reset ? data : S.listings.concat(data);
+  S.lmore = data.length === LPAGE;
+  if (partial || !reset) refreshListings(); else render();
+}
+let lqT;
+function listSearch(v){ S.lq = v; clearTimeout(lqT); lqT = setTimeout(() => loadListings(true, true), 300); }
+function refreshListings(){ const el = $('lrows'); if (el) el.innerHTML = listRowsHtml(); }
+function listRowsHtml(){
+  const rows = S.listings.map(l => `<div class="row"><div style="display:flex;gap:10px;align-items:center">
+    ${safeImg(l.image_url) ? `<img class="thumb" src="${esc(safeImg(l.image_url))}" alt="" loading="lazy">` : `<div class="thumb ph">${catIcon(l.category)}</div>`}
+    <div><b>${esc(l.name)}</b>
+    <small>${money(l.price)} · <span class="${l.in_stock ? 'ok' : 'bad'}">${l.in_stock ? 'In stock' : 'Out of stock'}</span></small>
+    <small>${esc(l.category || 'Other')}${l.product_id ? ' · auto from Stock' : ''}</small></div></div>
+    <div style="text-align:right">${l.product_id ? '' : `<button class="s" onclick="toggleListing('${l.id}')">${l.in_stock ? 'Mark out' : 'Mark in'}</button>`}
+    <button class="s" onclick="S.editingL='${l.id}';render();scrollTo(0,0)">Edit</button>
+    <button class="s d" onclick="delListing('${l.id}')">Del</button></div></div>`).join('');
+  return (rows || `<small style="color:var(--mut)">${S.lq ? 'No items match.' : 'Nothing listed yet.'}</small>`)
+    + (S.lmore ? `<button class="p g" onclick="loadListings(false)">Show more</button>` : '');
+}
+function availProducts(){
+  const q = S.fq.trim().toLowerCase();
+  return S.products.filter(p => !S.listedIds.has(p.id) && (!q || String(p.name).toLowerCase().includes(q)));
+}
+function availRowsHtml(){
+  const m = availProducts(), shown = m.slice(0, S.fshow);
+  return (shown.map(p => `<div class="row"><div><b>${esc(p.name)}</b><small>${money(p.selling_price)} · ${p.stock_qty} in stock</small></div>
+      <button class="s" onclick="listFromStock('${p.id}')">List online</button></div>`).join('') || '<small style="color:var(--mut)">No products match.</small>')
+    + (m.length > shown.length ? `<button class="p g" onclick="S.fshow+=20;refreshAvail()">Show more (${m.length - shown.length} left)</button>` : '');
+}
+function refreshAvail(){ const el = $('arows'); if (el) el.innerHTML = availRowsHtml(); }
+function availSearch(v){ S.fq = v; S.fshow = 20; refreshAvail(); }
 
 function catalogView(){
   if (S.catalogErr) return `<div class="card"><h3>Online shop</h3>
@@ -402,8 +475,7 @@ function catalogView(){
     <small class="bad">${esc(S.catalogErr)}</small></div>`;
   const sh = S.shop;
   const e = S.editingL ? S.listings.find(l => l.id === S.editingL) : null;
-  const listed = new Set(S.listings.map(l => l.product_id).filter(Boolean));
-  const avail = S.products.filter(p => !listed.has(p.id));
+  const notListed = S.products.filter(p => !S.listedIds.has(p.id)).length;
   const susp = sh?.suspended ? '<div class="card" style="border-color:var(--bad)"><b class="bad">Your shop is suspended</b><small style="display:block;color:var(--mut)">It is hidden from customers. Contact the ShopTrack admin.</small></div>' : '';
   const shopCard = `<div class="card"><h3>Your online shop</h3>
     <label>Shop name</label><input id="shn" maxlength="40" value="${esc(sh?.name)}" placeholder="e.g. Mark's Mini Mart">
@@ -426,20 +498,15 @@ function catalogView(){
     <input id="li" type="file" accept="image/*">
     <button class="p" onclick="saveListing()">${e ? 'Update item' : 'Add item'}</button>
     ${e ? `<button class="p g" onclick="S.editingL=null;render()">Cancel</button>` : ''}</div>
-  ${avail.length ? `<div class="card"><h3>Add from your stock</h3>
-    <small style="color:var(--mut)">Availability then follows your stock automatically. You can add a photo later with Edit.</small>
+  ${notListed ? `<div class="card"><h3>Add from your stock (${notListed})</h3>
+    <small style="color:var(--mut)">Availability then follows your stock automatically, even when the app is closed. Add photos later with Edit.</small>
     <label>Category for the items you list</label><select id="lsc">${catOptions(sh.category || 'Groceries')}</select>
-    ${avail.map(p => `<div class="row"><div><b>${esc(p.name)}</b><small>${money(p.selling_price)} · ${p.stock_qty} in stock</small></div>
-      <button class="s" onclick="listFromStock('${p.id}')">List online</button></div>`).join('')}</div>` : ''}
-  <div class="card"><h3>Online items (${S.listings.length})</h3>
-  ${S.listings.map(l => `<div class="row"><div style="display:flex;gap:10px;align-items:center">
-    ${safeImg(l.image_url) ? `<img class="thumb" src="${esc(safeImg(l.image_url))}" alt="" loading="lazy">` : `<div class="thumb ph">${catIcon(l.category)}</div>`}
-    <div><b>${esc(l.name)}</b>
-    <small>${money(l.price)} · <span class="${l.in_stock ? 'ok' : 'bad'}">${l.in_stock ? 'In stock' : 'Out of stock'}</span></small>
-    <small>${esc(l.category || 'Other')}${l.product_id ? ' · auto from Stock' : ''}</small></div></div>
-    <div style="text-align:right">${l.product_id ? '' : `<button class="s" onclick="toggleListing('${l.id}')">${l.in_stock ? 'Mark out' : 'Mark in'}</button>`}
-    <button class="s" onclick="S.editingL='${l.id}';render();scrollTo(0,0)">Edit</button>
-    <button class="s d" onclick="delListing('${l.id}')">Del</button></div></div>`).join('') || '<small style="color:var(--mut)">Nothing listed yet.</small>'}</div>`;
+    <button class="p" onclick="listAllFromStock()">List all ${notListed} products online</button>
+    <input id="fqi" type="search" placeholder="Or search to list one…" value="${esc(S.fq)}" oninput="availSearch(this.value)" style="margin-top:10px">
+    <div id="arows">${availRowsHtml()}</div></div>` : ''}
+  <div class="card"><h3>Online items (${S.lcount})</h3>
+  ${(S.lcount > 8 || S.lq) ? `<input id="lqi" type="search" placeholder="Search your online items…" value="${esc(S.lq)}" oninput="listSearch(this.value)" style="margin-bottom:8px">` : ''}
+  <div id="lrows">${listRowsHtml()}</div></div>`;
 }
 async function saveShop(){
   const name = $('shn').value.trim(), phone = $('shp').value.replace(/\D/g, '');
@@ -473,6 +540,20 @@ async function listFromStock(id){
   const {error} = await sb.from('listings').insert({product_id:p.id, name:p.name, price:p.selling_price, in_stock:p.stock_qty > 0, category});
   if (error) return flash(error.message, 'e');
   await loadCatalog(); flash('Listed online.');
+}
+async function listAllFromStock(){
+  const todo = S.products.filter(p => !S.listedIds.has(p.id));
+  if (!todo.length) return;
+  if (S.lcount + todo.length > 5000) return flash('The limit is 5,000 online items. List fewer products.', 'e');
+  if (!confirm(`List ${todo.length} products online? Customers will be able to see them.`)) return;
+  const category = $('lsc')?.value || 'Other';
+  flash('Listing products…');
+  for (let i = 0; i < todo.length; i += 200) {
+    const rows = todo.slice(i, i + 200).map(p => ({product_id:p.id, name:p.name, price:p.selling_price, in_stock:p.stock_qty > 0, category}));
+    const {error} = await sb.from('listings').insert(rows);
+    if (error) { await loadCatalog(); return flash(error.message, 'e'); }
+  }
+  await loadCatalog(); flash(`${todo.length} products listed.`);
 }
 async function toggleListing(id){
   const l = S.listings.find(x => x.id === id); if (!l) return;
