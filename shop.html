@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://inugsmnlodvfsbkpxuyb.supabase.co; connect-src 'self' https://inugsmnlodvfsbkpxuyb.supabase.co; object-src 'none'; base-uri 'none'; form-action 'self'; manifest-src 'self'; worker-src 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0f766e">
 <link rel="icon" href="icon-192.png">
@@ -54,6 +56,9 @@ footer a{color:var(--pri)}
 const SUPABASE_URL = 'https://inugsmnlodvfsbkpxuyb.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_cj84eL5811FNFUBZ-xtAXw_5A7-w4KX';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false}});
+// only ever show photos that live in our own storage folder
+const IMG_PREFIX = SUPABASE_URL + '/storage/v1/object/public/listing-images/';
+const safeImg = u => (typeof u === 'string' && u.startsWith(IMG_PREFIX)) ? u : '';
 const CATS = [['Groceries','🛒'],['Fruits & Vegetables','🥬'],['Drinks','🥤'],['Household','🧴'],['Electronics','🔌'],['Phones & Accessories','📱'],['Clothing & Shoes','👕'],['Beauty & Health','💄'],['Hardware & Tools','🔧'],['Stationery & School','✏️'],['Other','📦']];
 const catIcon = n => (CATS.find(c => c[0] === n) || CATS[CATS.length - 1])[1];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -76,7 +81,7 @@ function show(){
   <input id="q" type="search" placeholder="Search items…" value="${esc(q)}" oninput="q=this.value;show();refocus()">
   ${cats.length > 1 ? `<div class="chips"><button class="${cat ? '' : 'on'}" onclick="cat='';show()">All</button>${cats.map(c => `<button class="${cat === c ? 'on' : ''}" onclick="cat=this.dataset.c;show()" data-c="${esc(c)}">${catIcon(c)} ${esc(c)}</button>`).join('')}</div>` : ''}
   ${list.map(i => `<div class="item">
-    ${i.image_url ? `<img class="pic" src="${esc(i.image_url)}" alt="" loading="lazy">` : `<div class="pic ph">${catIcon(i.category)}</div>`}
+    ${safeImg(i.image_url) ? `<img class="pic" src="${esc(safeImg(i.image_url))}" alt="" loading="lazy">` : `<div class="pic ph">${catIcon(i.category)}</div>`}
     <div class="mid"><b>${esc(i.name)}</b>${i.description ? `<small>${esc(i.description)}</small>` : ''}
     <span class="tag ${i.in_stock ? 'ok' : 'no'}">${i.in_stock ? 'In stock' : 'Out of stock'}</span>
     ${phone && i.in_stock ? `<br><a class="ord" target="_blank" rel="noopener" href="https://wa.me/${phone}?text=${encodeURIComponent(`Hi ${shop.name}, I'd like to order: ${i.name} (${money(i.price)})`)}">Order on WhatsApp</a>` : ''}</div>
