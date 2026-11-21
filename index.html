@@ -476,7 +476,7 @@ function catalogView(){
   const sh = S.shop;
   const e = S.editingL ? S.listings.find(l => l.id === S.editingL) : null;
   const notListed = S.products.filter(p => !S.listedIds.has(p.id)).length;
-  const susp = sh?.suspended ? '<div class="card" style="border-color:var(--bad)"><b class="bad">Your shop is suspended</b><small style="display:block;color:var(--mut)">It is hidden from customers. Contact the ShopTrack admin.</small></div>' : '';
+  const susp = sh?.suspended ? '<div class="card" style="border-color:var(--bad)"><b class="bad">Your shop is suspended</b><small style="display:block;color:var(--mut)">It is hidden from customers. Contact the Brinvoq admin.</small></div>' : '';
   const shopCard = `<div class="card"><h3>Your online shop</h3>
     <label>Shop name</label><input id="shn" maxlength="40" value="${esc(sh?.name)}" placeholder="e.g. Mark's Mini Mart">
     <label>Shop category (what you mainly sell)</label><select id="shc">${catOptions(sh?.category || 'Groceries')}</select>
@@ -667,7 +667,7 @@ function savingsView(){
 
   const provCard = S.goals.length ? `<div class="card"><h3>Balance by provider</h3>
     ${Object.entries(byProv).sort((a, b) => b[1] - a[1]).map(([p, v]) => `<div class="row"><span>${esc(p)}</span><b>${money(v)}</b></div>`).join('')}
-    <small style="color:var(--mut)">These are the amounts you record here. ShopTrack cannot read your M-PESA or bank balance, so record each deposit and withdrawal to keep it accurate.</small></div>` : '';
+    <small style="color:var(--mut)">These are the amounts you record here. Brinvoq cannot read your M-PESA or bank balance, so record each deposit and withdrawal to keep it accurate.</small></div>` : '';
 
   const newGoal = `<div class="card"><h3>New savings goal</h3>
     <label>Goal name</label><input id="gn" maxlength="40" placeholder="e.g. New fridge, Rent buffer, Emergency">
@@ -737,7 +737,7 @@ function render(){
   const views = {home:homeView, sell:sellView, stock:stockView, exp:expensesView, rep:reportsView, cat:catalogView, sav:savingsView, more:moreView, me:profileView};
   const nav = [['home','🏠','Home'],['sell','🛒','Sell'],['stock','📦','Stock'],['cat','🌐','Online'],['more','☰','More']];
   const moreSet = ['more','exp','rep','sav','me'];
-  app.innerHTML = `<header><div class="brand"><img src="icon-192.png" alt="">ShopTrack</div>
+  app.innerHTML = `<header><div class="brand"><img src="icon-192.png" alt="">Brinvoq</div>
   <button class="avatar" onclick="go('me')" aria-label="Profile">${esc(displayName().charAt(0).toUpperCase())}</button></header>
   <main>${views[S.view]()}</main>
   <nav>${nav.map(([k,i,l])=>`<button class="${(S.view===k || (k==='more' && moreSet.includes(S.view)))?'on':''}" onclick="go('${k}')">${i}<br>${l}</button>`).join('')}</nav>`;
